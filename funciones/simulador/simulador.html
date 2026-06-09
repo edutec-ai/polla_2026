@@ -1,0 +1,147 @@
+<!-- funciones/simulador/simulador.html -->
+<!-- Desktop: Z1 fija arriba + Z2 fija izquierda + Z3 scroll derecha -->
+<!-- Móvil: Z1 fija arriba + Z2 + Z3 scroll libre -->
+<div class="simulador-modular">
+  <!-- ZONA 1: Selector de fase (FIJA - siempre visible arriba) -->
+  <div class="header-fase-sim">
+    <span class="fase-label-sim">📅 SELECCIONE LA FASE</span>
+    <select id="faseSelectSim" class="fase-select-sim">
+      <option value="grupos">🏆 GRUPOS - Base 20 pts</option>
+      <option value="16avos">⚡ 16 AVOS - Base 40 pts</option>
+      <option value="8avos">⚡ 8 AVOS - Base 60 pts</option>
+      <option value="cuartos">🏅 CUARTOS - Base 80 pts</option>
+      <option value="semis">🔥 SEMIFINALES - Base 100 pts</option>
+      <option value="tercero">🥉 3º y 4º PUESTO - Base 100 pts</option>
+      <option value="final">🏆 FINAL - Base 200 pts</option>
+    </select>
+  </div>
+
+  <!-- ZONA 3: Contenedor que cambia según dispositivo -->
+  <div class="simulador-zona3">
+    
+    <!-- ZONA 2: Cancha de fútbol -->
+    <div class="cancha-wrapper-sim">
+      <div class="cancha-contenedor-sim">
+        <div class="badge-partido-vivo-sim">
+          🔴 PARTIDO EN VIVO
+          <span id="multBadgeSim" class="mult-badge-sim">20</span>
+        </div>
+
+        <div class="corner-sim top-left-sim"></div>
+        <div class="corner-sim top-right-sim"></div>
+        <div class="corner-sim bottom-left-sim"></div>
+        <div class="corner-sim bottom-right-sim"></div>
+        <div class="circulo-central-sim"></div>
+
+        <div class="area-completa-sim izquierda">
+          <div class="area-chica-sim"></div>
+          <div class="bomba-area-sim"></div>
+          <div class="punto-penal-sim"></div>
+          <div class="porteria-sim"></div>
+        </div>
+
+        <div class="area-completa-sim derecha">
+          <div class="porteria-sim"></div>
+          <div class="punto-penal-sim"></div>
+          <div class="bomba-area-sim"></div>
+          <div class="area-chica-sim"></div>
+        </div>
+
+        <div class="flotante-local-sim">
+          <div class="bandera-sim" id="banderaLocalSim">🏳️</div>
+          <div class="equipo-nombre-sim">EQUIPO A</div>
+          <input type="number" id="pronosticoLocalSim" class="pronostico-input-sim" value="3" readonly>
+        </div>
+
+        <div class="flotante-visita-sim">
+          <div class="bandera-sim" id="banderaVisitaSim">🏳️</div>
+          <div class="equipo-nombre-sim">EQUIPO B</div>
+          <input type="number" id="pronosticoVisitaSim" class="pronostico-input-sim" value="2" readonly>
+        </div>
+
+        <button class="btn-simular-sim" id="btnSimularSim">💻 SIMULAR MARCADOR FINAL</button>
+      </div>
+    </div>
+
+    <!-- Contenedor derecho: resultado + tabla -->
+    <div class="simulador-derecha">
+      <!-- RESULTADO REAL -->
+      <div class="resultado-real-sim">
+        <div class="resultado-real-titulo-sim">🎯 SIMULAR PRONÓSTICO</div>
+        <div class="resultado-selector-sim">
+          <div class="resultado-equipo-sim">
+            <div style="color: white; font-weight: 700;">⚽ EQUIPO A</div>
+            <div class="resultado-controls-sim">
+              <button id="btnRealDecLocalSim">−</button>
+              <span id="realGolLocalSim" class="resultado-goles-sim">0</span>
+              <button id="btnRealIncLocalSim">+</button>
+            </div>
+          </div>
+          <div class="resultado-vs-sim">VS</div>
+          <div class="resultado-equipo-sim">
+            <div style="color: white; font-weight: 700;">⚽ EQUIPO B</div>
+            <div class="resultado-controls-sim">
+              <button id="btnRealDecVisitaSim">−</button>
+              <span id="realGolVisitaSim" class="resultado-goles-sim">0</span>
+              <button id="btnRealIncVisitaSim">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOTONES PREDEFINIDOS OCULTOS -->
+      <div class="botones-grid-sim" style="display: none;">
+        <div class="fila-botones-sim">
+          <button class="btn-resultado-sim" data-local="3" data-visita="0">3 - 0</button>
+          <button class="btn-resultado-sim" data-local="3" data-visita="1">3 - 1</button>
+          <button class="btn-resultado-sim" data-local="3" data-visita="2">3 - 2</button>
+          <button class="btn-resultado-sim" data-local="3" data-visita="3">3 - 3</button>
+        </div>
+        <div class="fila-botones-sim">
+          <button class="btn-resultado-sim" data-local="2" data-visita="0">2 - 0</button>
+          <button class="btn-resultado-sim" data-local="2" data-visita="1">2 - 1</button>
+          <button class="btn-resultado-sim" data-local="2" data-visita="2">2 - 2</button>
+          <button class="btn-resultado-sim" data-local="2" data-visita="3">2 - 3</button>
+        </div>
+        <div class="fila-botones-sim">
+          <button class="btn-resultado-sim" data-local="0" data-visita="0">0 - 0</button>
+          <button class="btn-resultado-sim" data-local="1" data-visita="0">1 - 0</button>
+          <button class="btn-resultado-sim" data-local="1" data-visita="1">1 - 1</button>
+          <button class="btn-resultado-sim" data-local="1" data-visita="2">1 - 2</button>
+        </div>
+      </div>
+
+      <!-- TABLA DE PUNTOS -->
+      <div class="tabla-puntos-sim">
+        <div class="tabla-header-sim">
+          <h3>📋 Detalle de puntos</h3>
+          <div class="badge-base-sim" id="basePtsBadgeSim">BASE: 20 PTS</div>
+        </div>
+        <div class="fila-categoria-sim">
+          <span class="categoria-nombre-sim">🏆 Ganador / Empate</span>
+          <span class="categoria-puntos-sim" id="ptsGanadorSim">0 pts</span>
+        </div>
+        <div class="fila-categoria-sim">
+          <span class="categoria-nombre-sim">⚽ Gol local exacto</span>
+          <span class="categoria-puntos-sim" id="ptsGolLocalSim">0 pts</span>
+        </div>
+        <div class="fila-categoria-sim">
+          <span class="categoria-nombre-sim">⚽ Gol visita exacto</span>
+          <span class="categoria-puntos-sim" id="ptsGolVisitaSim">0 pts</span>
+        </div>
+        <div class="fila-categoria-sim">
+          <span class="categoria-nombre-sim">📊 Diferencia de goles</span>
+          <span class="categoria-puntos-sim" id="ptsDiferenciaSim">0 pts</span>
+        </div>
+        <div class="fila-categoria-sim">
+          <span class="categoria-nombre-sim">🔄 Marcador inverso</span>
+          <span class="categoria-puntos-sim" id="ptsInversoSim">0 pts</span>
+        </div>
+        <div class="total-sim">
+          <span class="total-nombre-sim">⭐ PUNTAJE TOTAL</span>
+          <span class="total-puntos-sim" id="totalPuntosSim">0 pts</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

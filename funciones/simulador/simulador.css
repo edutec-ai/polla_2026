@@ -1,0 +1,607 @@
+/* funciones/simulador/simulador.css */
+/* Módulo del Simulador de Puntos - VERSIÓN DUAL DEFINITIVA */
+/* Desktop: Z1 fija arriba + Z2 fija izquierda + Z3 scroll derecha */
+/* Móvil: Z1 fija arriba + Z2 + Z3 scroll libre */
+
+.simulador-modular {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-radius: 20px;
+}
+
+/* ========== ZONA 1: Selector de fase (FIJA - siempre visible) ========== */
+.header-fase-sim {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 12px 16px;
+  border-radius: 28px;
+}
+
+.fase-label-sim {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.fase-select-sim {
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 28px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  font-family: inherit;
+  min-width: 200px;
+}
+
+.fase-select-sim option {
+  background: #1a1a2e;
+  color: white;
+}
+
+/* ========== ZONA 3: Contenedor que cambia según dispositivo ========== */
+.simulador-zona3 {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  gap: 16px;
+  padding: 0 16px 16px 16px;
+}
+
+/* ========== ZONA 2: Cancha ========== */
+.cancha-wrapper-sim {
+  border-radius: 20px;
+  overflow: hidden;
+  position: relative;
+  background: rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+}
+
+.cancha-contenedor-sim {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 105 / 68;
+  background-color: #4c9e2f;
+  background-image: linear-gradient(to right,
+    #4c9e2f 0%, #4c9e2f 8.33%,
+    #3d8b24 8.33%, #3d8b24 16.66%,
+    #4c9e2f 16.66%, #4c9e2f 25%,
+    #3d8b24 25%, #3d8b24 33.33%,
+    #4c9e2f 33.33%, #4c9e2f 41.66%,
+    #3d8b24 41.66%, #3d8b24 50%,
+    #4c9e2f 50%, #4c9e2f 58.33%,
+    #3d8b24 58.33%, #3d8b24 66.66%,
+    #4c9e2f 66.66%, #4c9e2f 75%,
+    #3d8b24 75%, #3d8b24 83.33%,
+    #4c9e2f 83.33%, #4c9e2f 91.66%,
+    #3d8b24 91.66%, #3d8b24 100%
+  );
+  border: 3px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cancha-contenedor-sim::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 3px;
+  background-color: rgba(255, 255, 255, 0.85);
+  transform: translateX(-50%);
+  z-index: 1;
+}
+
+.circulo-central-sim {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 18%;
+  aspect-ratio: 1;
+  border: 3px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.85) 4px, transparent 5px);
+}
+
+.area-completa-sim {
+  position: relative;
+  height: 74%;
+  width: 15%;
+  border: 3px solid rgba(255, 255, 255, 0.85);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+}
+
+.area-completa-sim.izquierda {
+  border-left: none;
+}
+
+.area-completa-sim.derecha {
+  border-right: none;
+  justify-content: flex-end;
+}
+
+.area-chica-sim {
+  height: 40%;
+  width: 35%;
+  border: 3px solid rgba(255, 255, 255, 0.85);
+}
+
+.izquierda .area-chica-sim {
+  border-left: none;
+}
+
+.derecha .area-chica-sim {
+  border-right: none;
+}
+
+.bomba-area-sim {
+  position: absolute;
+  top: 50%;
+  width: 50%;
+  aspect-ratio: 1;
+  border: 3px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+}
+
+.izquierda .bomba-area-sim {
+  left: 100%;
+  transform: translate(-50%, -50%);
+  clip-path: inset(0 0 0 50%);
+}
+
+.derecha .bomba-area-sim {
+  right: 100%;
+  transform: translate(50%, -50%);
+  clip-path: inset(0 50% 0 0);
+}
+
+.punto-penal-sim {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  background-color: rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+
+.izquierda .punto-penal-sim {
+  left: 75%;
+}
+
+.derecha .punto-penal-sim {
+  right: 75%;
+}
+
+.porteria-sim {
+  position: absolute;
+  top: 50%;
+  height: 22%;
+  width: 3%;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  transform: translateY(-50%);
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.izquierda .porteria-sim {
+  right: 100%;
+  border-right: none;
+  border-radius: 4px 0 0 4px;
+}
+
+.derecha .porteria-sim {
+  left: 100%;
+  border-left: none;
+  border-radius: 0 4px 4px 0;
+}
+
+.corner-sim {
+  position: absolute;
+  width: 2%;
+  aspect-ratio: 1;
+  border: 3px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+}
+
+.top-left-sim {
+  top: -3px;
+  left: -3px;
+  clip-path: inset(50% 0 0 50%);
+}
+
+.top-right-sim {
+  top: -3px;
+  right: -3px;
+  clip-path: inset(50% 50% 0 0);
+}
+
+.bottom-left-sim {
+  bottom: -3px;
+  left: -3px;
+  clip-path: inset(0 0 50% 50%);
+}
+
+.bottom-right-sim {
+  bottom: -3px;
+  right: -3px;
+  clip-path: inset(0 50% 50% 0);
+}
+
+.badge-partido-vivo-sim {
+  position: absolute;
+  top: 0px;
+  right: 0px;
+  background-color: #ff3b30;
+  color: white;
+  font-size: 8px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 0px 0px 0px 12px;
+  border: 1px solid white;
+  border-top: none;
+  border-right: none;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mult-badge-sim {
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 12px;
+  padding: 2px 8px;
+}
+
+.flotante-local-sim,
+.flotante-visita-sim {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  text-align: center;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(12px);
+  border-radius: 24px;
+  padding: 14px 20px;
+  z-index: 20;
+  min-width: 140px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.flotante-local-sim {
+  left: 3%;
+}
+
+.flotante-visita-sim {
+  right: 3%;
+}
+
+.bandera-sim {
+  font-size: 36px;
+  margin-bottom: 6px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.equipo-nombre-sim {
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+}
+
+.pronostico-input-sim {
+  background: transparent;
+  border: none;
+  font-size: 32px;
+  font-weight: 800;
+  color: #ffd700;
+  text-align: center;
+  width: 80px;
+  font-family: monospace;
+  cursor: pointer;
+  text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+}
+
+.pronostico-input-sim:focus {
+  outline: none;
+}
+
+.btn-simular-sim {
+  position: absolute;
+  bottom: 0px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #ff3b30, #c72a1f);
+  border: none;
+  border-radius: 40px;
+  padding: 10px 24px;
+  font-size: 10px;
+  font-weight: 800;
+  color: white;
+  cursor: pointer;
+  z-index: 25;
+  font-family: monospace;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-simular-sim:hover {
+  transform: translateX(-50%) scale(1.02);
+  background: linear-gradient(135deg, #ff554a, #e03a2e);
+}
+
+.btn-simular-sim:active {
+  transform: translateX(-50%) scale(0.98);
+}
+
+/* ========== Contenedor derecho (resultado + tabla) ========== */
+.simulador-derecha {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+/* RESULTADO REAL */
+.resultado-real-sim {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 20px;
+  padding: 16px;
+  flex-shrink: 0;
+}
+
+.resultado-real-titulo-sim {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffd700;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.resultado-selector-sim {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5%;
+  flex-wrap: wrap;
+}
+
+.resultado-equipo-sim {
+  text-align: center;
+  flex: 1;
+  min-width: 100px;
+}
+
+.resultado-equipo-sim > div:first-child {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: white;
+  white-space: nowrap;
+  margin-bottom: 8px;
+}
+
+.resultado-controls-sim {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.resultado-controls-sim button {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 14px;
+  width: 2rem;
+  height: 2rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.resultado-controls-sim button:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.05);
+}
+
+.resultado-goles-sim {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #fff;
+  min-width: 1.5rem;
+  text-align: center;
+}
+
+.resultado-vs-sim {
+  font-weight: 700;
+  color: #ffd700;
+  font-size: 0.9rem;
+  padding: 0 0.5rem;
+}
+
+/* TABLA DE PUNTOS */
+.tabla-puntos-sim {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 20px;
+  padding: 16px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.tabla-header-sim {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.tabla-header-sim h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+}
+
+.badge-base-sim {
+  background-color: #ff3b30;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid white;
+}
+
+.fila-categoria-sim {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.08);
+}
+
+.categoria-nombre-sim {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.categoria-puntos-sim {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.categoria-puntos-sim.acierto {
+  color: #ffd700;
+}
+
+.total-sim {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.total-nombre-sim {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.total-puntos-sim {
+  font-size: 28px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.total-puntos-sim.acierto {
+  color: #ffd700;
+}
+
+/* ========== MEDIA QUERY: DESKTOP (ancho ≥ 769px) ========== */
+@media (min-width: 769px) {
+  .simulador-zona3 {
+    flex-direction: row;
+    overflow: hidden;
+  }
+  
+  .cancha-wrapper-sim {
+    width: 45%;
+    max-width: 500px;
+    flex-shrink: 0;
+  }
+  
+  .simulador-derecha {
+    overflow: hidden;
+  }
+  
+  .tabla-puntos-sim {
+    overflow-y: auto;
+  }
+}
+
+/* ========== MEDIA QUERY: MÓVIL (ancho ≤ 768px) ========== */
+@media (max-width: 768px) {
+  .simulador-zona3 {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  
+  .cancha-wrapper-sim {
+    width: 100%;
+    flex-shrink: 0;
+  }
+  
+  .simulador-derecha {
+    flex: none;
+  }
+  
+  .tabla-puntos-sim {
+    overflow-y: visible;
+    flex: none;
+  }
+}
+
+/* Responsive para pantallas muy pequeñas */
+@media (max-width: 500px) {
+  .resultado-selector-sim {
+    gap: 2%;
+  }
+  
+  .resultado-equipo-sim {
+    min-width: 80px;
+  }
+  
+  .resultado-equipo-sim > div:first-child {
+    font-size: 0.7rem;
+    white-space: normal;
+  }
+  
+  .resultado-controls-sim button {
+    width: 1.5rem;
+    height: 1.5rem;
+    font-size: 0.8rem;
+  }
+  
+  .resultado-goles-sim {
+    font-size: 1rem;
+    min-width: 1.2rem;
+  }
+  
+  .resultado-vs-sim {
+    font-size: 0.8rem;
+    padding: 0 0.3rem;
+  }
+}
