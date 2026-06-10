@@ -12,6 +12,7 @@
 // - NUEVO: Feedback inmediato al guardar (muestra el marcador temporal)
 // - NUEVO: Sincronización en segundo plano cada 30 segundos
 // - NUEVO: Si Velneo tiene otro valor, corrige automáticamente
+// - NUEVO: Al guardar el partido inaugural (ID=1), vuelve a la pestaña AHORA
 
 import { onSimuladorCambio, simGetFechaStr, simGetHoraStr } from './lab.js';
 import { gruposSeleccion } from './especiales.js';
@@ -97,6 +98,7 @@ let countdownInterval = null;
 let countdownActivo = false;
 let syncIntervals = new Map(); // Para almacenar intervalos de sincronización por partido
 let tempPronosticos = new Map(); // Almacenar marcadores temporales {ptdId: {s1, s2, timestamp}}
+let globalCambiarVistaCallback = null; // Para volver a AHORA después de guardar el inaugural
 
 function mostrarToast(msg, tipo) {
     const toast = document.getElementById('app-toast');
@@ -114,6 +116,11 @@ function obtenerFechaReal() {
         fecha: `${year}-${month}-${day}`,
         hora: `${hours}:${minutes}`
     };
+}
+
+// Función para registrar el callback de cambio de vista (será llamado desde frontpage.js)
+export function setGlobalCambiarVistaCallback(callback) {
+    globalCambiarVistaCallback = callback;
 }
 
 function formatearFecha(fechaStr) {
@@ -248,7 +255,7 @@ async function sincronizarConVelneo(ptdId) {
             // Limpiar temporal y eliminar intervalo
             tempPronosticos.delete(ptdId);
             if (syncIntervals.has(ptdId)) {
-                clearInterval(syncIntervals.get(ptdId));
+                clearTimeout(syncIntervals.get(ptdId));
                 syncIntervals.delete(ptdId);
             }
         }
@@ -259,9 +266,9 @@ async function sincronizarConVelneo(ptdId) {
 
 // ========== FUNCIÓN PARA INICIAR SINCRONIZACIÓN PERIÓDICA ==========
 function iniciarSincronizacionPeriodica(ptdId, s1, s2) {
-    // Limpiar intervalo anterior si existe
+    // Limpiar timeout anterior si existe
     if (syncIntervals.has(ptdId)) {
-        clearInterval(syncIntervals.get(ptdId));
+        clearTimeout(syncIntervals.get(ptdId));
         syncIntervals.delete(ptdId);
     }
     
@@ -484,7 +491,7 @@ function renderTablaPosiciones(grupo) {
         <table style="width:100%;border-collapse:collapse;font-size:12px;">
             <thead><tr style="background:#f2f2f7;">
                 <th>Pos</th><th>Equipo</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>GF</th><th>GC</th><th>DG</th><th>PTS</th>
-            </table></thead>
+            <tr></thead>
             <tbody>${
                 equiposGrupo.map((eq, idx) => {
                     const esClasificado1 = eq.name === clasificados[1];
@@ -788,6 +795,14 @@ async function guardarPronostico(ptdId, s1, s2) {
             pronosticosCache[ptdId] = { s1, s2 };
             actualizarLocalStorage();
             mostrarToast('✅ Pronóstico guardado', 'ok');
+            
+            // Si es el partido inaugural (ID=1), volver a la pestaña AHORA después de 1.5 segundos
+            if (ptdId === 1 && globalCambiarVistaCallback) {
+                setTimeout(() => {
+                    console.log('[Partidos] Partido inaugural guardado, volviendo a AHORA');
+                    globalCambiarVistaCallback('ahora', currentJugador);
+                }, 1500);
+            }
             
             // Si la sincronización no ha ocurrido, forzarla después de 2 segundos
             setTimeout(() => {
