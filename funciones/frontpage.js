@@ -1,14 +1,15 @@
 // funciones/frontpage.js
 // VERSIÓN CORREGIDA - CON TIMESTAMP ANTI-CACHE EN TODOS LOS GET
+// EXPONE FUNCIÓN GLOBAL PARA CAMBIAR DE VISTA DESDE OTROS MÓDULOS
 
 import { inicializarMenu } from './menu.js';
 import { renderizarLab, onSimuladorCambio } from './lab.js';
 import { renderizarEspeciales, renderizarEspecialesConTab } from './especiales.js';
-import { renderizarPartidos } from './partidos.js';
+import { renderizarPartidos, setGlobalCambiarVistaCallback } from './partidos.js';
 import { renderizarAdmin, getAdminConfig } from './admin.js';
 import { renderizarPolla } from './polla.js';
 import { renderizarSimulador } from './simulador.js';
-import { renderizarAhora, setCambiarVistaCallback, suscribirAhoraAlSimulador } from './ahora.js';
+import { renderizarAhora, setCambiarVistaCallback as setAhoraCambiarVistaCallback, suscribirAhoraAlSimulador } from './ahora.js';
 import { renderizarReglas, setCambiarVistaCallback as setReglasCallback } from './reglas.js';
 import { 
   guardarPronosticosPartidosLocal, 
@@ -31,6 +32,7 @@ function urlWithTimestamp(url) {
   return `${url}${separator}_=${Date.now()}`;
 }
 
+// Función para cambiar la vista principal (expuesta globalmente)
 function cambiarVistaPrincipal(opcion, datosCuenta, tabEspecial = null) {
     const contenidoContainer = document.getElementById('fp-body-contenido');
     if (!contenidoContainer) return;
@@ -226,11 +228,15 @@ export async function cargarFrontpage(datosCuenta) {
   
   onSimuladorCambio((fecha, hora) => console.log('📅 Simulador actualizado:', fecha, hora));
   
+  // Exponer función global para cambiar de vista (para que otros módulos como partidos.js puedan usarla)
   globalCambiarVista = (opcion, cuenta, tabEspecial = null) => cambiarVistaPrincipal(opcion, cuenta, tabEspecial);
   
-  setCambiarVistaCallback(globalCambiarVista);
+  // Registrar callbacks para otros módulos
+  setAhoraCambiarVistaCallback(globalCambiarVista);
   setReglasCallback(globalCambiarVista);
+  setGlobalCambiarVistaCallback(globalCambiarVista); // Para partidos.js
   
+  // Suscribir ahora.js al simulador
   suscribirAhoraAlSimulador();
   
   const manejarSeleccionMenu = (opcion, cuenta) => {
