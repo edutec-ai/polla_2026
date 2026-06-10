@@ -1,5 +1,5 @@
 // funciones/ahora.js
-// Pantalla "AHORA" - Con modal independiente para el Partido Inaugural
+// Pantalla "AHORA" - Con redirección al modal de partidos para el Partido Inaugural
 // Actualización periódica: cada 60 segundos verifica cambios en los ciclos
 // CICLO 2: PULSO 100 antes de inauguración, PULSO 50 después
 // FONDO DE ESTADIO: 100% CSS (sin imágenes externas)
@@ -77,147 +77,36 @@ async function cargarPronosticos(jugId) {
     }
 }
 
-async function guardarPronostico(ptdId, s1, s2) {
-    if (!currentDatosCuenta) {
-        mostrarToast('Inicia sesión primero', 'err');
+// ========== NUEVA FUNCIÓN: REDIRIGIR AL PARTIDO INAUGURAL EN PARTIDOS ==========
+function irAlPartidoInaugural() {
+    if (!cambiarVistaCallback) {
+        console.error('[AHORA] No hay callback para cambiar vista');
         return;
     }
-    try {
-        const response = await fetch(`${BASE_V2}/_process/API_PUT_PAR?api_key=${KEY}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ jug: currentDatosCuenta.id, id: ptdId, pro_gol_loc: s1, pro_gol_vis: s2, pro_res: s1 > s2 ? '1' : s2 > s1 ? '2' : 'X' })
-        });
-        if (response.ok) {
-            pronosticosCache[ptdId] = { s1, s2 };
-            guardarPronosticosPartidosLocal(pronosticosCache);
-            mostrarToast('✅ Pronóstico guardado', 'ok');
-            return true;
+    
+    console.log('[AHORA] Redirigiendo al Partido Inaugural en PARTIDOS');
+    
+    // Cambiar a la pestaña PARTIDOS
+    cambiarVistaCallback('partidos', currentDatosCuenta);
+    
+    // Esperar a que se renderice la lista de partidos y abrir el modal del partido ID=1
+    setTimeout(() => {
+        const cardInaugural = document.querySelector('.partido-card[data-id="1"]');
+        if (cardInaugural) {
+            cardInaugural.click();
+            console.log('[AHORA] Modal del Partido Inaugural abierto');
         } else {
-            mostrarToast('❌ Error al guardar', 'err');
-            return false;
+            console.warn('[AHORA] No se encontró la card del partido inaugural');
+            mostrarToast('Partido no encontrado', 'err');
         }
-    } catch (error) {
-        mostrarToast('❌ Error de conexión', 'err');
-        return false;
-    }
+    }, 500);
 }
 
-function abrirModalPartidoInaugural() {
-    const partido = PARTIDO_INAUGURAL;
-    const ptsBase = getPtsBase(partido.fas);
-    const pronostico = pronosticosCache[partido.id] || { s1: 0, s2: 0 };
-    
-    const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:3000;display:flex;align-items:flex-end;justify-content:center;';
-    
-    const mensajePulso = `🟢 PULSO 100 · Si aciertas el marcador exacto tendrás ${ptsBase} puntos.`;
-    
-    overlay.innerHTML = `
-        <div style="background:#fff;border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;">
-            <div style="display:flex;justify-content:space-between;margin-bottom:16px;">
-                <div style="font-size:17px;font-weight:700;">Grupo A · Partido Inaugural</div>
-                <button id="modal-cerrar-btn" style="background:none;border:none;font-size:22px;cursor:pointer;">✕</button>
-            </div>
-            <div style="font-size:12px;color:#8e8e93;margin-bottom:20px;text-align:center;">11 de junio de 2026 · 2:00 PM</div>
-            
-            <div style="background: linear-gradient(135deg, #0a2f1f 0%, #1a5a3a 100%); border-radius: 20px; padding: 16px; margin-bottom: 20px; position: relative; overflow: hidden;">
-                <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: repeating-linear-gradient(90deg, rgba(0,0,0,0.1) 0px, rgba(0,0,0,0.1) 2px, transparent 2px, transparent 20px); pointer-events: none;"></div>
-                <div style="position: absolute; top: 0; left: 0; width: 100%; height: 20%; background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 100%); pointer-events: none;"></div>
-                <div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 20%; background: linear-gradient(0deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 100%); pointer-events: none;"></div>
-                <div style="position: absolute; top: 50%; left: 50%; width: 120px; height: 120px; border: 2px solid rgba(255,255,255,0.15); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;"></div>
-                <div style="position: absolute; top: 0; left: 50%; width: 2px; height: 100%; background: rgba(255,255,255,0.15); transform: translateX(-50%); pointer-events: none;"></div>
-                <div style="position: relative; z-index: 10; display:flex; justify-content:space-between; align-items:center;">
-                    <div style="text-align:center; flex:1;">
-                        <div style="font-size:56px; margin-bottom:8px;">${getBandera(partido.nom_loc)}</div>
-                        <div style="font-size:15px; font-weight:700; color:white;">${partido.nom_loc}</div>
-                    </div>
-                    <div style="font-size:18px; font-weight:700; color:white; text-shadow: 0 1px 2px rgba(0,0,0,0.5); padding:0 20px;">VS</div>
-                    <div style="text-align:center; flex:1;">
-                        <div style="font-size:56px; margin-bottom:8px;">${getBandera(partido.nom_vis)}</div>
-                        <div style="font-size:15px; font-weight:700; color:white;">${partido.nom_vis}</div>
-                    </div>
-                </div>
-            </div>
-            
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:24px;">
-                <div style="flex:1; text-align:center;">
-                    <div style="display:flex; align-items:center; justify-content:center; gap:12px; background:#f9f9fb; border-radius:30px; padding:8px 12px;">
-                        <button id="modal-dec-loc" style="width:44px;height:44px;border-radius:22px;background:#fff;border:1px solid #e5e5ea;font-size:20px;font-weight:700;cursor:pointer;">−</button>
-                        <input id="modal-s1" type="number" min="0" max="20" value="${pronostico.s1}" style="width:60px;height:44px;text-align:center;font-size:20px;font-weight:700;border:1px solid #e5e5ea;border-radius:12px;">
-                        <button id="modal-inc-loc" style="width:44px;height:44px;border-radius:22px;background:#fff;border:1px solid #e5e5ea;font-size:20px;font-weight:700;cursor:pointer;">+</button>
-                    </div>
-                </div>
-                <div style="flex:1; text-align:center;">
-                    <div style="display:flex; align-items:center; justify-content:center; gap:12px; background:#f9f9fb; border-radius:30px; padding:8px 12px;">
-                        <button id="modal-dec-vis" style="width:44px;height:44px;border-radius:22px;background:#fff;border:1px solid #e5e5ea;font-size:20px;font-weight:700;cursor:pointer;">−</button>
-                        <input id="modal-s2" type="number" min="0" max="20" value="${pronostico.s2}" style="width:60px;height:44px;text-align:center;font-size:20px;font-weight:700;border:1px solid #e5e5ea;border-radius:12px;">
-                        <button id="modal-inc-vis" style="width:44px;height:44px;border-radius:22px;background:#fff;border:1px solid #e5e5ea;font-size:20px;font-weight:700;cursor:pointer;">+</button>
-                    </div>
-                </div>
-            </div>
-            
-            <div style="background:#f2f2f7;border-radius:12px;padding:12px;margin-bottom:16px;">
-                <div style="font-size:14px;font-weight:700;margin-bottom:12px;">📋 PUNTOS POTENCIALES</div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                    <span>🏆 Ganador / Empate</span>
-                    <span style="color:#34c759;font-weight:700;">${Math.round(ptsBase * 0.4)} pts</span>
-                </div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                    <span>⚽ Gol local exacto</span>
-                    <span style="color:#34c759;font-weight:700;">${Math.round(ptsBase * 0.2)} pts</span>
-                </div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                    <span>⚽ Gol visita exacto</span>
-                    <span style="color:#34c759;font-weight:700;">${Math.round(ptsBase * 0.2)} pts</span>
-                </div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                    <span>📊 Diferencia de goles</span>
-                    <span style="color:#34c759;font-weight:700;">${Math.round(ptsBase * 0.2)} pts</span>
-                </div>
-                <div style="height:1px;background:#e5e5ea;margin:8px 0;"></div>
-                <div style="display:flex;justify-content:space-between;">
-                    <span style="font-weight:700;">⭐ BASE</span>
-                    <span style="color:#ff9500;font-weight:800;">${ptsBase} pts</span>
-                </div>
-            </div>
-            
-            <div style="background:#eafaf1;border-radius:12px;padding:12px;margin-bottom:16px;text-align:center;">
-                <span style="color:#1e8449;font-size:13px;font-weight:600;">${mensajePulso}</span>
-            </div>
-            
-            <button id="modal-guardar-btn" style="width:100%;background:#34c759;color:#fff;border:none;border-radius:14px;padding:14px;font-weight:700;cursor:pointer;">💾 Guardar pronóstico</button>
-        </div>
-    `;
-    
-    document.body.appendChild(overlay);
-    
-    const cerrarModal = () => overlay.remove();
-    document.getElementById('modal-cerrar-btn')?.addEventListener('click', cerrarModal);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrarModal(); });
-    
-    const s1Input = document.getElementById('modal-s1');
-    const s2Input = document.getElementById('modal-s2');
-    
-    document.getElementById('modal-inc-loc')?.addEventListener('click', () => {
-        if (s1Input) s1Input.value = Math.min(20, parseInt(s1Input.value || 0) + 1);
-    });
-    document.getElementById('modal-dec-loc')?.addEventListener('click', () => {
-        if (s1Input) s1Input.value = Math.max(0, parseInt(s1Input.value || 0) - 1);
-    });
-    document.getElementById('modal-inc-vis')?.addEventListener('click', () => {
-        if (s2Input) s2Input.value = Math.min(20, parseInt(s2Input.value || 0) + 1);
-    });
-    document.getElementById('modal-dec-vis')?.addEventListener('click', () => {
-        if (s2Input) s2Input.value = Math.max(0, parseInt(s2Input.value || 0) - 1);
-    });
-    
-    document.getElementById('modal-guardar-btn')?.addEventListener('click', async () => {
-        const s1 = parseInt(s1Input?.value) || 0;
-        const s2 = parseInt(s2Input?.value) || 0;
-        const success = await guardarPronostico(partido.id, s1, s2);
-        if (success) cerrarModal();
-    });
+// Función para navegar a especiales con pestaña específica
+function irAEspeciales(tab) {
+    if (typeof cambiarVistaCallback === 'function') {
+        cambiarVistaCallback('especiales', currentDatosCuenta, tab);
+    }
 }
 
 function esAntesDeInauguracion() {
@@ -244,7 +133,6 @@ function tieneCiclo2Completo() {
 
 function navegarACiclo1() {
     if (!cambiarVistaCallback) return;
-    console.log('[AHORA] Navegando a CICLO 1');
     cambiarVistaCallback('especiales', currentDatosCuenta);
     setTimeout(() => {
         const tab = document.querySelector('.esp-tab[data-tab="ciclo1"]');
@@ -264,7 +152,6 @@ function navegarACiclo1() {
 
 function navegarACiclo2() {
     if (!cambiarVistaCallback) return;
-    console.log('[AHORA] Navegando a CICLO 2');
     cambiarVistaCallback('especiales', currentDatosCuenta);
     setTimeout(() => {
         const tab = document.querySelector('.esp-tab[data-tab="ciclo2"]');
@@ -288,7 +175,6 @@ function navegarAReglas() {
 }
 
 function calcularTiempoRestante() {
-    // Usar fecha REAL del dispositivo
     const fechaActual = new Date();
     const fechaInauguracion = new Date(2026, 5, 11, 14, 0, 0);
     const diffMs = fechaInauguracion - fechaActual;
@@ -391,11 +277,22 @@ function actualizarCountdownTexto() {
     }
 }
 
+// Obtener el pronóstico del partido inaugural desde el cache global
+function obtenerPronosticoInaugural() {
+    const pronostico = pronosticosCache[PARTIDO_INAUGURAL.id];
+    if (pronostico) {
+        return `${pronostico.s1} - ${pronostico.s2}`;
+    }
+    return '? - ?';
+}
+
 function renderizarPreInauguracion(contenedor) {
     const ciclo1Completo = tieneCiclo1Completo();
     const ciclo2Completo = tieneCiclo2Completo();
     const tiempoRestante = calcularTiempoRestante();
     const antesInauguracion = esAntesDeInauguracion();
+    
+    const pronosticoInaugural = obtenerPronosticoInaugural();
     
     const ciclo2Badge = !ciclo2Completo 
         ? (antesInauguracion 
@@ -423,7 +320,6 @@ function renderizarPreInauguracion(contenedor) {
                     overflow: hidden;
                 }
                 
-                /* Textura de césped (rayas) */
                 .ahora-header::before {
                     content: '';
                     position: absolute;
@@ -435,7 +331,6 @@ function renderizarPreInauguracion(contenedor) {
                     pointer-events: none;
                 }
                 
-                /* Gradas superiores */
                 .ahora-header .gradas-top {
                     position: absolute;
                     top: 0;
@@ -446,7 +341,6 @@ function renderizarPreInauguracion(contenedor) {
                     pointer-events: none;
                 }
                 
-                /* Gradas inferiores */
                 .ahora-header .gradas-bottom {
                     position: absolute;
                     bottom: 0;
@@ -457,7 +351,6 @@ function renderizarPreInauguracion(contenedor) {
                     pointer-events: none;
                 }
                 
-                /* Círculo central */
                 .ahora-header .circulo-central {
                     position: absolute;
                     top: 50%;
@@ -470,7 +363,6 @@ function renderizarPreInauguracion(contenedor) {
                     pointer-events: none;
                 }
                 
-                /* Línea de medio campo */
                 .ahora-header .linea-medio {
                     position: absolute;
                     top: 0;
@@ -482,7 +374,6 @@ function renderizarPreInauguracion(contenedor) {
                     pointer-events: none;
                 }
                 
-                /* Punto central */
                 .ahora-header .punto-central {
                     position: absolute;
                     top: 50%;
@@ -495,7 +386,6 @@ function renderizarPreInauguracion(contenedor) {
                     pointer-events: none;
                 }
                 
-                /* Textura de puntos en el césped */
                 .ahora-header .textura-puntos {
                     position: absolute;
                     top: 0;
@@ -604,11 +494,12 @@ function renderizarPreInauguracion(contenedor) {
                     <div class="ahora-card-flecha">→</div>
                 </div>
                 
+                <!-- ========== CARD PARTIDO INAUGURAL REDIRIGE A PARTIDOS ========== -->
                 <div class="ahora-card" data-accion="partido-inaugural">
                     <div class="ahora-card-icono">⚽</div>
                     <div class="ahora-card-info">
                         <div class="ahora-card-titulo">Partido Inaugural</div>
-                        <div class="ahora-card-desc">🇲🇽 México vs Sudáfrica 🇿🇦 · 11 de junio, 2:00 PM</div>
+                        <div class="ahora-card-desc">🇲🇽 México vs Sudáfrica 🇿🇦 · 11 de junio, 2:00 PM<br><strong>Tu pronóstico: ${pronosticoInaugural}</strong></div>
                     </div>
                     <div class="ahora-card-flecha">→</div>
                 </div>
@@ -636,7 +527,7 @@ function renderizarPreInauguracion(contenedor) {
     
     if (cardCiclo1) cardCiclo1.addEventListener('click', () => navegarACiclo1());
     if (cardCiclo2) cardCiclo2.addEventListener('click', () => navegarACiclo2());
-    if (cardPartido) cardPartido.addEventListener('click', () => abrirModalPartidoInaugural());
+    if (cardPartido) cardPartido.addEventListener('click', () => irAlPartidoInaugural()); // ✅ Redirige a PARTIDOS
     if (cardReglas) cardReglas.addEventListener('click', () => navegarAReglas());
 }
 
@@ -679,6 +570,16 @@ export async function renderizarAhora(contenedor, datosCuenta) {
         tiempoRestanteInterval = setInterval(() => {
             if (esAntesDeInauguracion()) {
                 actualizarCountdownTexto();
+                // También actualizar el pronóstico mostrado
+                const pronosticoInaugural = obtenerPronosticoInaugural();
+                const cardDesc = document.querySelector('.ahora-card[data-accion="partido-inaugural"] .ahora-card-desc');
+                if (cardDesc) {
+                    const textoActual = cardDesc.innerHTML;
+                    const nuevoTexto = textoActual.replace(/Tu pronóstico: .*?(?=<br|$)/, `Tu pronóstico: ${pronosticoInaugural}`);
+                    if (nuevoTexto !== textoActual) {
+                        cardDesc.innerHTML = nuevoTexto;
+                    }
+                }
             } else {
                 clearInterval(tiempoRestanteInterval);
                 tiempoRestanteInterval = null;
@@ -689,6 +590,18 @@ export async function renderizarAhora(contenedor, datosCuenta) {
         actualizacionPeriodicaInterval = setInterval(() => {
             if (esAntesDeInauguracion()) {
                 actualizarEstadoCards();
+                // Recargar pronósticos para actualizar el marcador del inaugural
+                cargarPronosticos(datosCuenta.id).then(() => {
+                    const pronosticoInaugural = obtenerPronosticoInaugural();
+                    const cardDesc = document.querySelector('.ahora-card[data-accion="partido-inaugural"] .ahora-card-desc');
+                    if (cardDesc) {
+                        const textoActual = cardDesc.innerHTML;
+                        const nuevoTexto = textoActual.replace(/Tu pronóstico: .*?(?=<br|$)/, `Tu pronóstico: ${pronosticoInaugural}`);
+                        if (nuevoTexto !== textoActual) {
+                            cardDesc.innerHTML = nuevoTexto;
+                        }
+                    }
+                });
             } else {
                 clearInterval(actualizacionPeriodicaInterval);
                 actualizacionPeriodicaInterval = null;
