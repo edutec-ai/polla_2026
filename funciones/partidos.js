@@ -9,6 +9,9 @@
 // - Scroll inteligente solo en pestaña TODOS
 // - Botón K con bandera 🇨🇴
 // - Modal con fondo de estadio CSS puro (sin imágenes)
+// - CORREGIDO: Inputs tipo text con inputmode numeric para Android (evita scroll errático)
+// - CORREGIDO: Gap reducido entre botones y inputs
+// - CORREGIDO: Validación de solo números en inputs
 // - NUEVO: Feedback inmediato al guardar (muestra el marcador temporal)
 // - NUEVO: Sincronización en segundo plano cada 30 segundos
 // - NUEVO: Si Velneo tiene otro valor, corrige automáticamente
@@ -491,7 +494,7 @@ function renderTablaPosiciones(grupo) {
         <table style="width:100%;border-collapse:collapse;font-size:12px;">
             <thead><tr style="background:#f2f2f7;">
                 <th>Pos</th><th>Equipo</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>GF</th><th>GC</th><th>DG</th><th>PTS</th>
-            <tr></thead>
+            </table></thead>
             <tbody>${
                 equiposGrupo.map((eq, idx) => {
                     const esClasificado1 = eq.name === clasificados[1];
@@ -773,7 +776,6 @@ function scrollAPrimerDestacado() {
 }
 
 // ========== FUNCIÓN GUARDAR PRONÓSTICO CORREGIDA ==========
-// Ahora muestra feedback inmediato y sincroniza en segundo plano
 async function guardarPronostico(ptdId, s1, s2) {
     if (!currentJugador) { 
         mostrarToast('Inicia sesión primero', 'err'); 
@@ -791,12 +793,11 @@ async function guardarPronostico(ptdId, s1, s2) {
             body: JSON.stringify({ jug: currentJugador.id, id: ptdId, pro_gol_loc: s1, pro_gol_vis: s2, pro_res: s1 > s2 ? '1' : s2 > s1 ? '2' : 'X' })
         });
         if (response.ok) { 
-            // Actualizar cache
             pronosticosCache[ptdId] = { s1, s2 };
             actualizarLocalStorage();
             mostrarToast('✅ Pronóstico guardado', 'ok');
             
-            // Si es el partido inaugural (ID=1), volver a la pestaña AHORA después de 1.5 segundos
+            // Si es el partido inaugural (ID=1), volver a AHORA después de 1.5 segundos
             if (ptdId === 1 && globalCambiarVistaCallback) {
                 setTimeout(() => {
                     console.log('[Partidos] Partido inaugural guardado, volviendo a AHORA');
@@ -804,7 +805,6 @@ async function guardarPronostico(ptdId, s1, s2) {
                 }, 1500);
             }
             
-            // Si la sincronización no ha ocurrido, forzarla después de 2 segundos
             setTimeout(() => {
                 if (tempPronosticos.has(ptdId)) {
                     sincronizarConVelneo(ptdId);
@@ -813,7 +813,6 @@ async function guardarPronostico(ptdId, s1, s2) {
         }
         else {
             mostrarToast('❌ Error al guardar', 'err');
-            // Limpiar temporal si hubo error
             tempPronosticos.delete(ptdId);
             if (syncIntervals.has(ptdId)) {
                 clearTimeout(syncIntervals.get(ptdId));
@@ -831,6 +830,22 @@ async function guardarPronostico(ptdId, s1, s2) {
     }
 }
 
+// Función para validar input numérico (solo números, min 0, max 20)
+function validarInputNumerico(input) {
+    if (!input) return;
+    input.addEventListener('input', (e) => {
+        let valor = e.target.value.replace(/[^0-9]/g, '');
+        if (valor === '') valor = '0';
+        let num = parseInt(valor);
+        if (num > 20) num = 20;
+        e.target.value = num;
+    });
+}
+
+// ========== FUNCIÓN abrirModal CORREGIDA ==========
+// - Inputs tipo text con inputmode numeric para Android
+// - Gap reducido entre botones y inputs
+// - Validación de solo números
 function abrirModal(partido, fechaSim, horaSim) {
     const estadoEst = getEstadoPartidoPorEst(partido);
     const tienePronosticoPrevio = pronosticosCache[partido.id] !== undefined;
@@ -986,19 +1001,20 @@ function abrirModal(partido, fechaSim, horaSim) {
             </div>
         </div>
         
+        <!-- CONTROLES DE GOLES CORREGIDOS PARA ANDROID -->
         <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:24px;">
             <div style="flex:1; text-align:center;">
-                <div style="display:flex; align-items:center; justify-content:center; gap:12px; background:#f9f9fb; border-radius:30px; padding:8px 12px;">
-                    <button id="modal-dec-loc" style="width:44px;height:44px;border-radius:22px;background:#fff;border:1px solid #e5e5ea;font-size:20px;font-weight:700;cursor:pointer;">−</button>
-                    <input id="modal-s1" type="number" min="0" max="20" value="${pronostico.s1}" style="width:60px;height:44px;text-align:center;font-size:20px;font-weight:700;border:1px solid #e5e5ea;border-radius:12px;">
-                    <button id="modal-inc-loc" style="width:44px;height:44px;border-radius:22px;background:#fff;border:1px solid #e5e5ea;font-size:20px;font-weight:700;cursor:pointer;">+</button>
+                <div style="display:flex; align-items:center; justify-content:center; gap:8px; background:#f9f9fb; border-radius:30px; padding:6px 10px;">
+                    <button id="modal-dec-loc" style="width:36px;height:36px;border-radius:18px;background:#fff;border:1px solid #e5e5ea;font-size:18px;font-weight:700;cursor:pointer; display:flex; align-items:center; justify-content:center;">−</button>
+                    <input id="modal-s1" type="text" inputmode="numeric" pattern="[0-9]*" value="${pronostico.s1}" style="width:44px;height:36px;text-align:center;font-size:17px;font-weight:700;border:1px solid #e5e5ea;border-radius:10px; background:#fff;">
+                    <button id="modal-inc-loc" style="width:36px;height:36px;border-radius:18px;background:#fff;border:1px solid #e5e5ea;font-size:18px;font-weight:700;cursor:pointer; display:flex; align-items:center; justify-content:center;">+</button>
                 </div>
             </div>
             <div style="flex:1; text-align:center;">
-                <div style="display:flex; align-items:center; justify-content:center; gap:12px; background:#f9f9fb; border-radius:30px; padding:8px 12px;">
-                    <button id="modal-dec-vis" style="width:44px;height:44px;border-radius:22px;background:#fff;border:1px solid #e5e5ea;font-size:20px;font-weight:700;cursor:pointer;">−</button>
-                    <input id="modal-s2" type="number" min="0" max="20" value="${pronostico.s2}" style="width:60px;height:44px;text-align:center;font-size:20px;font-weight:700;border:1px solid #e5e5ea;border-radius:12px;">
-                    <button id="modal-inc-vis" style="width:44px;height:44px;border-radius:22px;background:#fff;border:1px solid #e5e5ea;font-size:20px;font-weight:700;cursor:pointer;">+</button>
+                <div style="display:flex; align-items:center; justify-content:center; gap:8px; background:#f9f9fb; border-radius:30px; padding:6px 10px;">
+                    <button id="modal-dec-vis" style="width:36px;height:36px;border-radius:18px;background:#fff;border:1px solid #e5e5ea;font-size:18px;font-weight:700;cursor:pointer; display:flex; align-items:center; justify-content:center;">−</button>
+                    <input id="modal-s2" type="text" inputmode="numeric" pattern="[0-9]*" value="${pronostico.s2}" style="width:44px;height:36px;text-align:center;font-size:17px;font-weight:700;border:1px solid #e5e5ea;border-radius:10px; background:#fff;">
+                    <button id="modal-inc-vis" style="width:36px;height:36px;border-radius:18px;background:#fff;border:1px solid #e5e5ea;font-size:18px;font-weight:700;cursor:pointer; display:flex; align-items:center; justify-content:center;">+</button>
                 </div>
             </div>
         </div>
@@ -1040,18 +1056,54 @@ function abrirModal(partido, fechaSim, horaSim) {
     
     const s1Input = document.getElementById('modal-s1');
     const s2Input = document.getElementById('modal-s2');
+    const guardarBtn = document.getElementById('modal-guardar-btn');
     
-    document.getElementById('modal-inc-loc')?.addEventListener('click', () => { if (s1Input) s1Input.value = Math.min(20, parseInt(s1Input.value||0)+1); });
-    document.getElementById('modal-dec-loc')?.addEventListener('click', () => { if (s1Input) s1Input.value = Math.max(0, parseInt(s1Input.value||0)-1); });
-    document.getElementById('modal-inc-vis')?.addEventListener('click', () => { if (s2Input) s2Input.value = Math.min(20, parseInt(s2Input.value||0)+1); });
-    document.getElementById('modal-dec-vis')?.addEventListener('click', () => { if (s2Input) s2Input.value = Math.max(0, parseInt(s2Input.value||0)-1); });
+    // Validar inputs (solo números)
+    validarInputNumerico(s1Input);
+    validarInputNumerico(s2Input);
     
-    document.getElementById('modal-guardar-btn')?.addEventListener('click', () => { 
-        const s1 = parseInt(s1Input?.value)||0; 
-        const s2 = parseInt(s2Input?.value)||0; 
-        guardarPronostico(partido.id, s1, s2); 
-        overlay.remove(); 
+    // Botones incremento/decremento para LOCAL
+    document.getElementById('modal-inc-loc')?.addEventListener('click', () => { 
+        if (s1Input) {
+            let val = parseInt(s1Input.value) || 0;
+            val = Math.min(20, val + 1);
+            s1Input.value = val;
+        }
     });
+    document.getElementById('modal-dec-loc')?.addEventListener('click', () => { 
+        if (s1Input) {
+            let val = parseInt(s1Input.value) || 0;
+            val = Math.max(0, val - 1);
+            s1Input.value = val;
+        }
+    });
+    
+    // Botones incremento/decremento para VISITANTE
+    document.getElementById('modal-inc-vis')?.addEventListener('click', () => { 
+        if (s2Input) {
+            let val = parseInt(s2Input.value) || 0;
+            val = Math.min(20, val + 1);
+            s2Input.value = val;
+        }
+    });
+    document.getElementById('modal-dec-vis')?.addEventListener('click', () => { 
+        if (s2Input) {
+            let val = parseInt(s2Input.value) || 0;
+            val = Math.max(0, val - 1);
+            s2Input.value = val;
+        }
+    });
+    
+    // Botón guardar
+    if (guardarBtn) {
+        guardarBtn.onclick = () => { 
+            const s1 = parseInt(s1Input?.value) || 0; 
+            const s2 = parseInt(s2Input?.value) || 0; 
+            guardarPronostico(partido.id, s1, s2); 
+            overlay.remove(); 
+        };
+    }
+    
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 }
 
@@ -1072,7 +1124,6 @@ async function refrescarContenido() {
     const contenedorScroll = document.getElementById('partidos-contenido-scroll');
     if (!contenedorScroll) return;
     
-    // Recargar pronósticos desde cache (los temporales ya se manejan en renderPartidoCard)
     if (currentJugador) {
         await cargarPronosticos(currentJugador.id, false);
     }
@@ -1080,7 +1131,6 @@ async function refrescarContenido() {
     const fechaSim = simGetFechaStr ? simGetFechaStr() : new Date().toISOString().split('T')[0];
     const horaSim = simGetHoraStr ? simGetHoraStr() : new Date().toTimeString().split(' ')[0].substring(0,5);
     
-    // FILTRO: SOLO FASE DE GRUPOS (fas === 1) Y ESTADOS VISIBLES (1,2,3,4)
     const partidosVisibles = partidosCache.filter(p => {
         const est = Number(p.est);
         return est >= 1 && est <= 4 && p.fas === 1;
@@ -1190,7 +1240,6 @@ export async function renderizarPartidos(contenedor, datosCuenta) {
     
     detenerCountdown();
     
-    // Limpiar todos los temporales y timeouts
     tempPronosticos.clear();
     for (const [ptdId, timeout] of syncIntervals) {
         clearTimeout(timeout);
