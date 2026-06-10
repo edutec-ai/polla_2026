@@ -1,6 +1,6 @@
 // funciones/partidos.js
 // Módulo de Partidos - La Polla Mundialista 2026
-// VERSIÓN DEFINITIVA CON TAB "COLOMBIA"
+// VERSIÓN DEFINITIVA CON FEEDBACK INMEDIATO Y SINCRONIZACIÓN EN SEGUNDO PLANO
 // - Tabs: TODOS, GRUPOS, COLOMBIA
 // - Tab TODOS muestra SOLO fase de grupos (72 partidos)
 // - Control por `est` (Velneo) con nuevos estados: 1=PULSO100, 2=PULSO50, 3=ENTRETIEMPO, 4=TERMINADO
@@ -9,6 +9,9 @@
 // - Scroll inteligente solo en pestaña TODOS
 // - Botón K con bandera 🇨🇴
 // - Modal con fondo de estadio CSS puro (sin imágenes)
+// - NUEVO: Feedback inmediato al guardar (muestra el marcador temporal)
+// - NUEVO: Sincronización en segundo plano cada 30 segundos
+// - NUEVO: Si Velneo tiene otro valor, corrige automáticamente
 
 import { onSimuladorCambio, simGetFechaStr, simGetHoraStr } from './lab.js';
 import { gruposSeleccion } from './especiales.js';
@@ -92,6 +95,8 @@ let partidosCache = [], equiposCache = [], pronosticosCache = {}, resultadosReal
 let tabActivo = 'todos', grupoActivo = 'A', simuladorSuscrito = false, currentJugador = null;
 let countdownInterval = null;
 let countdownActivo = false;
+let syncIntervals = new Map(); // Para almacenar intervalos de sincronización por partido
+let tempPronosticos = new Map(); // Almacenar marcadores temporales {ptdId: {s1, s2, timestamp}}
 
 function mostrarToast(msg, tipo) {
     const toast = document.getElementById('app-toast');
@@ -192,10 +197,7 @@ async function cargarPartidos() {
 async function cargarEquipos() {
     try { 
         const timestamp = Date.now();
-        
         const response = await fetch(`${BASE}/fifa_equ?api_key=${KEY}&_=${timestamp}`); 
-        
-        
         equiposCache = (await response.json()).fifa_equ || []; 
         console.log(`[Partidos] Cargados ${equiposCache.length} equipos`);
         return equiposCache; 
@@ -206,14 +208,110 @@ async function cargarEquipos() {
     }
 }
 
-async function cargarPronosticos(jugId) {
-    if (!jugId) return;
-    const locales = cargarPronosticosPartidosLocal();
-    if (locales && Object.keys(locales).length > 0) { 
-        pronosticosCache = locales; 
-        console.log(`[Partidos] ${Object.keys(pronosticosCache).length} pronósticos desde localStorage`); 
-        return; 
+// ========== FUNCIÓN PARA OBTENER PRONÓSTICO ACTUAL DE VELNEO ==========
+async function obtenerPronosticoActual(ptdId) {
+    if (!currentJugador) return null;
+    try {
+        const timestamp = Date.now();
+        const response = await fetch(`${BASE_V2}/fifa_jug_pro?api_key=${KEY}&filter[id]=${currentJugador.id}&fields=jug,jug.name,id,ptd,pro_gol_loc,pro_gol_vis,pro_res&_=${timestamp}`);
+        const data = await response.json();
+        const pronostico = data.fifa_jug_pro?.find(p => p.ptd === ptdId);
+        if (pronostico) {
+            return { s1: pronostico.pro_gol_loc || 0, s2: pronostico.pro_gol_vis || 0 };
+        }
+        return null;
+    } catch (error) {
+        console.error('[Partidos] Error obteniendo pronóstico actual:', error);
+        return null;
     }
+}
+
+// ========== FUNCIÓN PARA SINCRONIZAR CON VELNEO ==========
+async function sincronizarConVelneo(ptdId) {
+    if (!currentJugador) return;
+    
+    try {
+        const valorActual = await obtenerPronosticoActual(ptdId);
+        
+        if (valorActual) {
+            // Actualizar cache
+            pronosticosCache[ptdId] = valorActual;
+            guardarPronosticosPartidosLocal(pronosticosCache);
+            
+            // Verificar si el temporal es diferente
+            const temp = tempPronosticos.get(ptdId);
+            if (temp && (temp.s1 !== valorActual.s1 || temp.s2 !== valorActual.s2)) {
+                console.log(`[Sync] Partido ${ptdId}: temporal ${temp.s1}-${temp.s2} vs Velneo ${valorActual.s1}-${valorActual.s2}`);
+                actualizarCardPartido(ptdId, valorActual.s1, valorActual.s2);
+            }
+            
+            // Limpiar temporal y eliminar intervalo
+            tempPronosticos.delete(ptdId);
+            if (syncIntervals.has(ptdId)) {
+                clearInterval(syncIntervals.get(ptdId));
+                syncIntervals.delete(ptdId);
+            }
+        }
+    } catch (error) {
+        console.error(`[Sync] Error sincronizando partido ${ptdId}:`, error);
+    }
+}
+
+// ========== FUNCIÓN PARA INICIAR SINCRONIZACIÓN PERIÓDICA ==========
+function iniciarSincronizacionPeriodica(ptdId, s1, s2) {
+    // Limpiar intervalo anterior si existe
+    if (syncIntervals.has(ptdId)) {
+        clearInterval(syncIntervals.get(ptdId));
+        syncIntervals.delete(ptdId);
+    }
+    
+    // Guardar marcador temporal
+    tempPronosticos.set(ptdId, { s1, s2, timestamp: Date.now() });
+    
+    // Programar sincronización única después de 30 segundos
+    const timeoutId = setTimeout(() => {
+        sincronizarConVelneo(ptdId);
+    }, 30000);
+    
+    syncIntervals.set(ptdId, timeoutId);
+}
+
+// ========== FUNCIÓN PARA ACTUALIZAR SOLO UNA CARD ESPECÍFICA ==========
+function actualizarCardPartido(ptdId, s1, s2) {
+    const card = document.querySelector(`.partido-card[data-id="${ptdId}"]`);
+    if (!card) return;
+    
+    // Buscar el contenedor del pronóstico dentro de la card
+    const pronosticoContainer = card.querySelector('.pronostico-container');
+    if (pronosticoContainer) {
+        pronosticoContainer.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; gap:12px;">
+                <span style="font-size:11px; color:#8e8e93; flex-shrink:0;">Tu pronóstico:</span>
+                <div style="flex:1; display:flex; justify-content:center;">
+                    <div style="background:#f2f2f7; border-radius:10px; padding:6px 16px; display:inline-block;">
+                        <span style="font-size:16px; font-weight:700; color:#007aff;">${s1} - ${s2}</span>
+                    </div>
+                </div>
+                <div style="width:70px; flex-shrink:0;"></div>
+            </div>
+        `;
+    }
+}
+
+async function cargarPronosticos(jugId, forceRefresh = false) {
+    if (!jugId) return;
+    
+    // Si no es forceRefresh, intentar usar localStorage
+    if (!forceRefresh) {
+        const locales = cargarPronosticosPartidosLocal();
+        if (locales && Object.keys(locales).length > 0) { 
+            pronosticosCache = locales; 
+            console.log(`[Partidos] ${Object.keys(pronosticosCache).length} pronósticos desde localStorage`); 
+            return; 
+        }
+    }
+    
+    // Si forceRefresh es true o no hay datos en localStorage, consultar a Velneo
     try {
         const timestamp = Date.now();
         const response = await fetch(`${BASE_V2}/fifa_jug_pro?api_key=${KEY}&filter[id]=${jugId}&fields=jug,jug.name,id,ptd,pro_gol_loc,pro_gol_vis,pro_res&_=${timestamp}`);
@@ -221,6 +319,7 @@ async function cargarPronosticos(jugId) {
         pronosticosCache = {};
         pronosticos.forEach(p => { pronosticosCache[p.ptd] = { s1: p.pro_gol_loc || 0, s2: p.pro_gol_vis || 0 }; });
         guardarPronosticosPartidosLocal(pronosticosCache);
+        console.log(`[Partidos] ✅ ${Object.keys(pronosticosCache).length} pronósticos desde API (Velneo)`);
     } catch (error) { 
         console.error('Error cargando pronósticos:', error); 
     }
@@ -436,7 +535,15 @@ function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimerDia = 
     const estadoEst = getEstadoPartidoPorEst(partido);
     const esFuturo = (estadoEst.estado === 'pulso100' || estadoEst.estado === 'pulso50');
     const ptsBase = estadoEst.puntosBase || getPtsBase(partido.fas);
-    const pronostico = pronosticosCache[partido.id];
+    let pronostico = pronosticosCache[partido.id];
+    
+    // Verificar si hay marcador temporal para este partido
+    const temp = tempPronosticos.get(partido.id);
+    if (temp && (Date.now() - temp.timestamp) < 30000) {
+        // Usar marcador temporal si es menor a 30 segundos
+        pronostico = { s1: temp.s1, s2: temp.s2 };
+    }
+    
     const resultadoReal = getResultadoReal(partido.id);
     const estilo = getFondoStyle(tipoFondo);
     const marcadorEnVivo = getMarcadorEnVivo(partido);
@@ -517,7 +624,7 @@ function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimerDia = 
             
             const total = ganador + golLocal + golVisita + diferencia + inverso;
             
-            pronosticoHTML = `<div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; gap:12px;">
+            pronosticoHTML = `<div class="pronostico-container"><div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; gap:12px;">
                 <span style="font-size:11px; color:#8e8e93; flex-shrink:0;">Tu pronóstico:</span>
                 <div style="flex:1; display:flex; justify-content:center;">
                     <div style="background:#f2f2f7; border-radius:10px; padding:6px 16px; display:inline-block;">
@@ -536,9 +643,9 @@ function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimerDia = 
                     </div>
                 </div>
                 <div style="width:70px; flex-shrink:0;"></div>
-            </div>`;
+            </div></div>`;
         } else {
-            pronosticoHTML = `<div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; gap:12px;">
+            pronosticoHTML = `<div class="pronostico-container"><div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; gap:12px;">
                 <span style="font-size:11px; color:#8e8e93; flex-shrink:0;">Tu pronóstico:</span>
                 <div style="flex:1; display:flex; justify-content:center;">
                     <div style="background:#f2f2f7; border-radius:10px; padding:6px 16px; display:inline-block;">
@@ -546,10 +653,10 @@ function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimerDia = 
                     </div>
                 </div>
                 <div style="width:70px; flex-shrink:0;"></div>
-            </div>`;
+            </div></div>`;
         }
     } else if (esFuturo && puedeEditar) {
-        pronosticoHTML = '<div style="margin-top:8px; text-align:center;"><span style="font-size:11px; color:#007aff; font-weight:600;">⚽ HAZ TU PRONÓSTICO</span></div>';
+        pronosticoHTML = '<div class="pronostico-container"><div style="margin-top:8px; text-align:center;"><span style="font-size:11px; color:#007aff; font-weight:600;">⚽ HAZ TU PRONÓSTICO</span></div></div>';
     }
     
     return `<div class="partido-card" data-id="${partido.id}" data-fas="${partido.fas}" data-est="${partido.est}" data-fch="${partido.fch}" data-hor="${partido.hor}" style="${cardStyle}" data-fechapartido="${partido.fch ? partido.fch.split('T')[0] : ''}">
@@ -658,27 +765,68 @@ function scrollAPrimerDestacado() {
     }, 500);
 }
 
+// ========== FUNCIÓN GUARDAR PRONÓSTICO CORREGIDA ==========
+// Ahora muestra feedback inmediato y sincroniza en segundo plano
 async function guardarPronostico(ptdId, s1, s2) {
-    if (!currentJugador) { mostrarToast('Inicia sesión primero', 'err'); return; }
+    if (!currentJugador) { 
+        mostrarToast('Inicia sesión primero', 'err'); 
+        return; 
+    }
+    
+    // Mostrar el marcador temporal INMEDIATAMENTE
+    iniciarSincronizacionPeriodica(ptdId, s1, s2);
+    actualizarCardPartido(ptdId, s1, s2);
+    mostrarToast('💾 Guardando...', 'info');
+    
     try {
         const response = await fetch(`${BASE_V2}/_process/API_PUT_PAR?api_key=${KEY}`, {
             method: 'POST', headers: { 'Content-Type': 'text/plain' },
             body: JSON.stringify({ jug: currentJugador.id, id: ptdId, pro_gol_loc: s1, pro_gol_vis: s2, pro_res: s1 > s2 ? '1' : s2 > s1 ? '2' : 'X' })
         });
         if (response.ok) { 
+            // Actualizar cache
             pronosticosCache[ptdId] = { s1, s2 };
             actualizarLocalStorage();
-            mostrarToast('✅ Pronóstico guardado', 'ok'); 
-            refrescarContenido(); 
+            mostrarToast('✅ Pronóstico guardado', 'ok');
+            
+            // Si la sincronización no ha ocurrido, forzarla después de 2 segundos
+            setTimeout(() => {
+                if (tempPronosticos.has(ptdId)) {
+                    sincronizarConVelneo(ptdId);
+                }
+            }, 2000);
         }
-        else mostrarToast('❌ Error al guardar', 'err');
-    } catch (error) { mostrarToast('❌ Error de conexión', 'err'); }
+        else {
+            mostrarToast('❌ Error al guardar', 'err');
+            // Limpiar temporal si hubo error
+            tempPronosticos.delete(ptdId);
+            if (syncIntervals.has(ptdId)) {
+                clearTimeout(syncIntervals.get(ptdId));
+                syncIntervals.delete(ptdId);
+            }
+        }
+    } catch (error) { 
+        console.error('Error al guardar:', error);
+        mostrarToast('❌ Error de conexión', 'err');
+        tempPronosticos.delete(ptdId);
+        if (syncIntervals.has(ptdId)) {
+            clearTimeout(syncIntervals.get(ptdId));
+            syncIntervals.delete(ptdId);
+        }
+    }
 }
 
 function abrirModal(partido, fechaSim, horaSim) {
     const estadoEst = getEstadoPartidoPorEst(partido);
     const tienePronosticoPrevio = pronosticosCache[partido.id] !== undefined;
-    const pronostico = pronosticosCache[partido.id] || { s1: 0, s2: 0 };
+    let pronostico = pronosticosCache[partido.id] || { s1: 0, s2: 0 };
+    
+    // Verificar si hay marcador temporal
+    const temp = tempPronosticos.get(partido.id);
+    if (temp && (Date.now() - temp.timestamp) < 30000) {
+        pronostico = { s1: temp.s1, s2: temp.s2 };
+    }
+    
     const ptsBase = estadoEst.puntosBase || getPtsBase(partido.fas);
     
     if (estadoEst.estado === 'terminado') {
@@ -904,9 +1052,16 @@ async function refrescarDatosPartidos() {
     mostrarToast('✅ Partidos actualizados', 'ok');
 }
 
-function refrescarContenido() {
+// ========== FUNCIÓN REFRESCAR CONTENIDO CORREGIDA ==========
+async function refrescarContenido() {
     const contenedorScroll = document.getElementById('partidos-contenido-scroll');
     if (!contenedorScroll) return;
+    
+    // Recargar pronósticos desde cache (los temporales ya se manejan en renderPartidoCard)
+    if (currentJugador) {
+        await cargarPronosticos(currentJugador.id, false);
+    }
+    
     const fechaSim = simGetFechaStr ? simGetFechaStr() : new Date().toISOString().split('T')[0];
     const horaSim = simGetHoraStr ? simGetHoraStr() : new Date().toTimeString().split(' ')[0].substring(0,5);
     
@@ -960,7 +1115,6 @@ function refrescarContenido() {
             };
         });
     } else if (tabActivo === 'colombia') {
-        // Filtrar solo partidos de Colombia (también fase de grupos)
         const partidosColombia = partidosVisibles.filter(p => 
             (p.nom_loc === 'Colombia' || p.nom_vis === 'Colombia')
         );
@@ -1020,6 +1174,13 @@ export async function renderizarPartidos(contenedor, datosCuenta) {
     currentJugador = datosCuenta;
     
     detenerCountdown();
+    
+    // Limpiar todos los temporales y timeouts
+    tempPronosticos.clear();
+    for (const [ptdId, timeout] of syncIntervals) {
+        clearTimeout(timeout);
+    }
+    syncIntervals.clear();
     
     await cargarEquipos();
     await cargarPartidos();
