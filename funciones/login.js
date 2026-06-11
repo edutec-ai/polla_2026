@@ -1,14 +1,21 @@
 // funciones/login.js
-// Módulo de autenticación - VERSIÓN ESTABLE (sin anti-cache agresivo)
+// Módulo de autenticación - VERSIÓN CORREGIDA
 // - Botón "Cambiar contraseña" como badge pequeño y discreto
 // - Modal con botones "Cambiar contraseña" y "Cancelar"
 // - Autocomplete deshabilitado para evitar sugerencias de Windows
 // - Validación de espacios en blanco
 // - Limpieza completa de localStorage al logout
+// - CORREGIDO: Al seleccionar cuenta, se consultan los puntos reales desde Velneo
 
 const BASE    = 'https://server.sion.hysintegrar.com/fifa2026/vERP_2_dat_dat/v1';
 const BASE_V2 = 'https://server.sion.hysintegrar.com/fifa2026/vERP_2_dat_dat/v2';
 const KEY     = 'SuzvTp4qwXQtAVFJbdzP';
+
+// Función para timestamp anti-cache
+function urlWithTimestamp(url) {
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}_=${Date.now()}`;
+}
 
 // Hash de la contraseña "123" (primeros 50 caracteres)
 const HASH_123 = 'a03ab19b866fc585b5cb1812a2f63ca861e7e7643ee5d43fd7';
@@ -59,6 +66,23 @@ function limpiarDatosUsuario() {
     
     keysToRemove.forEach(key => localStorage.removeItem(key));
     console.log('[Login] ✅ Datos de usuario limpiados');
+}
+
+// Función para obtener puntos reales de una cuenta por su ID
+async function obtenerPuntosReales(cuentaId) {
+    try {
+        const response = await fetch(urlWithTimestamp(`${BASE}/fifa_jug?api_key=${KEY}&filter[id]=${cuentaId}`));
+        if (!response.ok) return null;
+        const data = await response.json();
+        const jugador = data.fifa_jug?.[0];
+        if (jugador && jugador.pts !== undefined) {
+            return jugador.pts;
+        }
+        return null;
+    } catch (error) {
+        console.error('[Login] Error obteniendo puntos reales:', error);
+        return null;
+    }
 }
 
 // Mostrar modal de cambio de contraseña
@@ -436,7 +460,7 @@ function renderizarCardsCuentas(usrId, nombreUsuario) {
   const listEl = document.getElementById('cuenta-list');
   const subEl = document.getElementById('cuenta-sub');
   
-  fetch(BASE + '/fifa_jug?api_key=' + KEY)
+  fetch(urlWithTimestamp(BASE + '/fifa_jug?api_key=' + KEY))
     .then(r => {
       if (!r.ok) throw new Error('Error HTTP: ' + r.status);
       return r.json();
@@ -463,19 +487,39 @@ function renderizarCardsCuentas(usrId, nombreUsuario) {
           card.style.cursor = 'pointer';
           card.style.transition = 'background 0.2s, transform 0.1s';
           
+          // Mostrar puntos de la cuenta (pueden ser 0 temporalmente)
+          const puntosMostrados = c.ptr || c.pun || 0;
+          
           card.innerHTML = `
             <div class="cuenta-avatar" style="background:${colores[i % colores.length]};color:#fff;">${iniciales}</div>
             <div class="cuenta-info">
               <div class="cuenta-nombre">${escapeHtml(c.name || '—')}</div>
               <div class="cuenta-tag">Cuenta ${i+1} · ID: ${c.id}</div>
             </div>
-            <div class="cuenta-pts">${c.ptr || c.pun || 0} pts</div>
+            <div class="cuenta-pts">${puntosMostrados} pts</div>
           `;
           
           card.onmousedown = () => card.style.transform = 'scale(0.97)';
           card.onmouseup = () => card.style.transform = 'scale(1)';
           
-          card.onclick = () => {
+          // ========== CORRECCIÓN: Al seleccionar cuenta, obtener puntos reales ==========
+          card.onclick = async () => {
+            // Mostrar loader en la card mientras se consultan los puntos reales
+            const ptsElement = card.querySelector('.cuenta-pts');
+            const textoOriginal = ptsElement.innerHTML;
+            ptsElement.innerHTML = '⟳ ...';
+            
+            // Obtener puntos reales desde Velneo
+            const puntosReales = await obtenerPuntosReales(c.id);
+            
+            // Crear objeto cuenta enriquecido con los puntos reales
+            const cuentaEnriquecida = {
+              ...c,
+              pts: puntosReales !== null ? puntosReales : (c.ptr || c.pun || 0)
+            };
+            
+            console.log(`[Login] Cuenta ${c.name} (ID: ${c.id}) - Puntos reales: ${cuentaEnriquecida.pts}`);
+            
             const cuentascCard = document.getElementById('cuentasForm');
             const frontpageCard = document.getElementById('frontpageForm');
             
@@ -485,11 +529,12 @@ function renderizarCardsCuentas(usrId, nombreUsuario) {
                 cuentascCard.classList.remove('login-activo', 'login-retirado');
                 frontpageCard.classList.add('login-activo');
                 if (typeof callbackFrontpage === 'function') {
-                  callbackFrontpage(c);
+                  callbackFrontpage(cuentaEnriquecida);  // Enviar cuenta con puntos reales
                 }
               }, 400);
             }
           };
+          
           listEl.appendChild(card);
         });
         
