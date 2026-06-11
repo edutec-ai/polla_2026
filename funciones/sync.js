@@ -1,6 +1,6 @@
 // funciones/sync.js
 // Módulo de sincronización con localStorage y Velneo
-// VERSIÓN CON VERSIONADO Y TIMESTAMPS
+// VERSIÓN CON VERSIONADO Y TIMESTAMPS - CORREGIDO
 
 const STORAGE_KEYS = {
   PARTIDOS: 'polla_pronosticos_partidos',
@@ -20,7 +20,7 @@ export function guardarPronosticosPartidosLocal(pronosticos) {
   const dataToSave = {
     version: DATA_VERSION,
     timestamp: Date.now(),
-    data: pronosticosa
+    data: pronosticos
   };
   localStorage.setItem(STORAGE_KEYS.PARTIDOS, JSON.stringify(dataToSave));
 }
