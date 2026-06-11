@@ -1,5 +1,6 @@
 // funciones/frontpage.js
-// VERSIÓN POST-PARTIDO - CON TABLA (sin SIMULADOR)
+// VERSIÓN CORREGIDA - CON TIMESTAMP ANTI-CACHE EN TODOS LOS GET
+// CORREGIDO: Los puntos del encabezado ahora muestran el valor real de Velneo (pts)
 // EXPONE FUNCIÓN GLOBAL PARA CAMBIAR DE VISTA DESDE OTROS MÓDULOS
 
 import { inicializarMenu } from './menu.js';
@@ -207,10 +208,25 @@ export async function cargarFrontpage(datosCuenta) {
     `;
   }
   
+  // Variable para almacenar los puntos reales desde Velneo
+  let puntosReales = 0;
+  
   if (jugadorId) {
     try {
       await cargarDatosIniciales(jugadorId);
       console.log('[Frontpage] Datos cargados exitosamente, procediendo a renderizar');
+      
+      // Consultar los puntos reales del jugador desde Velneo
+      const puntosUrl = urlWithTimestamp(`${BASE}/fifa_jug?api_key=${KEY}&filter[id]=${jugadorId}`);
+      const responsePuntos = await fetch(puntosUrl);
+      if (responsePuntos.ok) {
+        const dataPuntos = await responsePuntos.json();
+        const jugadorActualizado = dataPuntos.fifa_jug?.[0];
+        if (jugadorActualizado && jugadorActualizado.pts !== undefined) {
+          puntosReales = jugadorActualizado.pts;
+          console.log('[Frontpage] Puntos reales del jugador:', puntosReales);
+        }
+      }
     } catch (error) {
       console.error('[Frontpage] Error cargando datos:', error);
       if (contenidoContainer) {
@@ -246,7 +262,8 @@ export async function cargarFrontpage(datosCuenta) {
   
   const idCuenta = datosCuenta.id || '—';
   const nombreCuenta = datosCuenta.name || datosCuenta.nombre || 'Cuenta';
-  const puntosCuenta = datosCuenta.ptr || datosCuenta.pun || 0;
+  // Usar los puntos reales obtenidos de Velneo, o fallback a los datos de la cuenta
+  const puntosCuenta = puntosReales || datosCuenta.ptr || datosCuenta.pun || 0;
   const usrAsociado = datosCuenta.usr || '—';
   const estadoCuenta = datosCuenta.off ? 'Inactiva' : 'Activa';
   
@@ -283,9 +300,18 @@ export async function cargarFrontpage(datosCuenta) {
         font-weight:700; 
         font-size:1.1rem; 
       }
-      .fp-nombre-cuenta { font-size:1.1rem; font-weight:700; color:#fff; }
+      .fp-nombre-cuenta { 
+        font-size:1.1rem; 
+        font-weight:700; 
+        color:#fff; 
+      }
+      .fp-puntos-cuenta {
+        font-size:0.9rem;
+        font-weight:700;
+        color:#ffd60a;
+        margin-top:2px;
+      }
       .fp-id-cuenta { font-size:0.75rem; color:rgba(255,255,255,0.4); margin-left:6px; }
-      .fp-linea-dos { font-size:0.85rem; color:${colorFinal}; font-weight:700; }
       .fp-linea-tres { font-size:0.8rem; color:rgba(255,255,255,0.5); }
       .fp-status-badge { color:#34c759; }
       
@@ -452,7 +478,7 @@ export async function cargarFrontpage(datosCuenta) {
             <span class="fp-nombre-cuenta">${nombreCuenta}</span>
             ${adminConfig.mostrarIdCuenta && esAdmin ? `<span class="fp-id-cuenta">#${idCuenta}</span>` : ''}
           </div>
-          <div class="fp-linea-dos">${puntosCuenta} pts</div>
+          <div class="fp-puntos-cuenta">🏆 ${puntosCuenta} pts</div>
           <div class="fp-linea-tres">
             ${adminConfig.mostrarIdVelneo && esAdmin ? `Usuario: ${usrAsociado} · ` : ''}
             ${adminConfig.mostrarEstado && esAdmin ? `<span class="fp-status-badge">${estadoCuenta}</span>` : ''}
