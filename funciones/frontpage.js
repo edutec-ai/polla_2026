@@ -1,6 +1,6 @@
 // funciones/frontpage.js
 // VERSIÓN CORREGIDA - CON TIMESTAMP ANTI-CACHE EN TODOS LOS GET
-// CORREGIDO: Los puntos del encabezado ahora muestran el valor real de Velneo (pts)
+// CORREGIDO: Los puntos del encabezado se buscan por NOMBRE (no por ID)
 // EXPONE FUNCIÓN GLOBAL PARA CAMBIAR DE VISTA DESDE OTROS MÓDULOS
 
 import { inicializarMenu } from './menu.js';
@@ -185,12 +185,46 @@ async function cargarDatosIniciales(jugadorId) {
   }
 }
 
+// Función para obtener los puntos reales del usuario por nombre
+async function obtenerPuntosPorNombre(nombreUsuario) {
+  if (!nombreUsuario) return 0;
+  
+  try {
+    const puntosUrl = urlWithTimestamp(`${BASE}/fifa_jug?api_key=${KEY}`);
+    const response = await fetch(puntosUrl);
+    if (!response.ok) return 0;
+    
+    const data = await response.json();
+    const jugadores = data.fifa_jug || [];
+    
+    // Buscar por nombre exacto o por coincidencia
+    const jugador = jugadores.find(j => 
+      j.name === nombreUsuario || 
+      j.name?.toLowerCase() === nombreUsuario.toLowerCase() ||
+      j.nombre === nombreUsuario
+    );
+    
+    if (jugador && jugador.pts !== undefined) {
+      console.log('[Frontpage] Puntos encontrados para', nombreUsuario, ':', jugador.pts);
+      return jugador.pts;
+    }
+    
+    // Si no se encuentra por nombre, buscar por ID en la lista de cuentas
+    console.log('[Frontpage] No se encontraron puntos para', nombreUsuario);
+    return 0;
+  } catch (error) {
+    console.error('[Frontpage] Error obteniendo puntos:', error);
+    return 0;
+  }
+}
+
 export async function cargarFrontpage(datosCuenta) {
   const frontpageCard = document.getElementById('frontpageForm');
   if (!frontpageCard) return;
   
   const esAdmin = datosCuenta.usr === 'super' || datosCuenta.name === 'super' || datosCuenta.nombre === 'super';
   const jugadorId = datosCuenta.id || datosCuenta.ID;
+  const nombreCuenta = datosCuenta.name || datosCuenta.nombre || 'Cuenta';
   
   const contenidoContainer = document.getElementById('fp-body-contenido');
   if (contenidoContainer) {
@@ -208,7 +242,7 @@ export async function cargarFrontpage(datosCuenta) {
     `;
   }
   
-  // Variable para almacenar los puntos reales desde Velneo
+  // Variable para almacenar los puntos reales
   let puntosReales = 0;
   
   if (jugadorId) {
@@ -216,17 +250,10 @@ export async function cargarFrontpage(datosCuenta) {
       await cargarDatosIniciales(jugadorId);
       console.log('[Frontpage] Datos cargados exitosamente, procediendo a renderizar');
       
-      // Consultar los puntos reales del jugador desde Velneo
-      const puntosUrl = urlWithTimestamp(`${BASE}/fifa_jug?api_key=${KEY}&filter[id]=${jugadorId}`);
-      const responsePuntos = await fetch(puntosUrl);
-      if (responsePuntos.ok) {
-        const dataPuntos = await responsePuntos.json();
-        const jugadorActualizado = dataPuntos.fifa_jug?.[0];
-        if (jugadorActualizado && jugadorActualizado.pts !== undefined) {
-          puntosReales = jugadorActualizado.pts;
-          console.log('[Frontpage] Puntos reales del jugador:', puntosReales);
-        }
-      }
+      // Obtener puntos reales por NOMBRE (no por ID)
+      puntosReales = await obtenerPuntosPorNombre(nombreCuenta);
+      console.log('[Frontpage] Puntos reales obtenidos:', puntosReales);
+      
     } catch (error) {
       console.error('[Frontpage] Error cargando datos:', error);
       if (contenidoContainer) {
@@ -261,9 +288,8 @@ export async function cargarFrontpage(datosCuenta) {
   };
   
   const idCuenta = datosCuenta.id || '—';
-  const nombreCuenta = datosCuenta.name || datosCuenta.nombre || 'Cuenta';
-  // Usar los puntos reales obtenidos de Velneo, o fallback a los datos de la cuenta
-  const puntosCuenta = puntosReales || datosCuenta.ptr || datosCuenta.pun || 0;
+  // Usar los puntos reales obtenidos por nombre
+  const puntosCuenta = puntosReales;
   const usrAsociado = datosCuenta.usr || '—';
   const estadoCuenta = datosCuenta.off ? 'Inactiva' : 'Activa';
   
