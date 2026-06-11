@@ -726,7 +726,7 @@ function abrirModal(partido, fechaSim, horaSim) {
                 <div style="height:1px;background:#e5e5ea;margin:8px 0;"></div>
                 <div style="display:flex;justify-content:space-between;"><span style="font-weight:700;">⭐ TOTAL</span><span style="color:#ff9500;font-weight:800;">${total} pts</span></div>
             </div>
-            <button id="cerrar-modal-accion" style="width:100%;background:#007aff;color:#fff;border:none;border-radius:14px;padding:14px;cursor:pointer;">Cerrar</button>
+            <button id="cerrar-modal-accion" style="width:100%;background:#007aff;color:#fff;border:none;border-radius:14px;padding:14px;font-size:16px;cursor:pointer;">Cerrar</button>
         </div>`;
         document.body.appendChild(overlay);
         document.getElementById('cerrar-modal-btn')?.addEventListener('click', () => overlay.remove());
