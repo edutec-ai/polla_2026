@@ -1,11 +1,6 @@
 // funciones/partidos.js
 // Módulo de Partidos - La Polla Mundialista 2026
-// VERSIÓN COMPLETA CON:
-// - Badges simplificados: EN VIVO y TERMINADO
-// - Marcadores EN VIVO con actualización cada 60 segundos
-// - Tabla de posiciones con puntos correctos (usa gol_loc/gol_vis para EN VIVO)
-// - Feedback inmediato al guardar
-// - Sincronización en segundo plano
+// VERSIÓN CORREGIDA - Fechas alineadas con Velneo (12 de junio)
 
 import { onSimuladorCambio, simGetFechaStr, simGetHoraStr } from './lab.js';
 import { gruposSeleccion } from './especiales.js';
@@ -105,12 +100,34 @@ function formatearCountdown(dias, horas, minutos, segundos) {
     return `Faltan ${partes[0]}, ${partes[1]} y ${partes[2]}`;
 }
 
+// ========== CORRECCIÓN DE FECHAS SEGÚN VELNEO ==========
+function corregirFechasSegunVelneo(partidos) {
+    return partidos.map(p => {
+        // Canadá vs Bosnia → 12/06/2026 14:00
+        if ((p.nom_loc === 'Canadá' && p.nom_vis === 'Bosnia') ||
+            (p.nom_loc === 'Bosnia' && p.nom_vis === 'Canadá')) {
+            return { ...p, fch: '2026-06-12', hor: '14:00:00', est: 1 };
+        }
+        // EE.UU. vs Paraguay → 12/06/2026 20:00
+        if ((p.nom_loc === 'EE. UU.' && p.nom_vis === 'Paraguay') ||
+            (p.nom_loc === 'Paraguay' && p.nom_vis === 'EE. UU.')) {
+            return { ...p, fch: '2026-06-12', hor: '20:00:00', est: 1 };
+        }
+        // México vs Sudáfrica (11/06 ya pasó, se mantiene)
+        return p;
+    });
+}
+
 async function cargarPartidos() {
     try {
         const timestamp = Date.now();
         const response = await fetch(`${BASE}/fifa_ptd?api_key=${KEY}&_=${timestamp}`);
         const data = await response.json();
         partidosCache = data.fifa_ptd || [];
+        
+        // ✅ CORRECCIÓN: Aplicar fechas de Velneo
+        partidosCache = corregirFechasSegunVelneo(partidosCache);
+        
         partidosCache.sort((a, b) => {
             if (a.fch !== b.fch) return a.fch.localeCompare(b.fch);
             return (a.hor || '00:00:00').localeCompare(b.hor || '00:00:00');
@@ -123,7 +140,7 @@ async function cargarPartidos() {
             if (!p.grp_for && grupo) p.grp_for = grupo;
         });
         
-        console.log('[Partidos] Cargados y asignados grupos a', partidosCache.length, 'partidos');
+        console.log('[Partidos] Cargados y corregidos', partidosCache.length, 'partidos');
         
         const responseReales = await fetch(`${BASE}/fifa_ptd?api_key=${KEY}&filter[est]=4&_=${timestamp}`);
         const dataReales = await responseReales.json();
@@ -156,11 +173,9 @@ async function cargarEquipos() {
     }
 }
 
-// ========== ESTADOS SIMPLIFICADOS: EN VIVO y TERMINADO ==========
 function getEstadoPartidoPorEst(partido) {
     const est = Number(partido.est);
     
-    // TERMINADO
     if (est === 4) {
         return { 
             estado: 'terminado', 
@@ -172,7 +187,6 @@ function getEstadoPartidoPorEst(partido) {
         };
     }
     
-    // EN VIVO (est = 2 o 3)
     if (est === 2 || est === 3) {
         return { 
             estado: 'envivo', 
@@ -184,7 +198,6 @@ function getEstadoPartidoPorEst(partido) {
         };
     }
     
-    // ANTES DEL PARTIDO (est = 1 o cualquier otro)
     return { 
         estado: 'pendiente', 
         texto: '',
@@ -195,11 +208,9 @@ function getEstadoPartidoPorEst(partido) {
     };
 }
 
-// ========== MARCADOR EN VIVO MEJORADO ==========
 function getMarcadorEnVivo(partido) {
     const est = Number(partido.est);
     if (est === 2 || est === 3) {
-        // Devolver el marcador actual (gol_loc, gol_vis) si existe
         return { 
             tieneMarcador: true, 
             texto: 'EN VIVO',
@@ -343,7 +354,6 @@ function getResultadoReal(partidoId) {
     return real && real.gol_loc !== null ? { gol_loc: real.gol_loc, gol_vis: real.gol_vis } : null; 
 }
 
-// ========== TABLA DE POSICIONES CORREGIDA ==========
 function renderTablaPosiciones(grupo) {
     const equiposGrupo = equiposCache.filter(e => obtenerGrupoPorEquipo(e.name) === grupo);
     const clasificados = gruposSeleccion[grupo] || {};
@@ -352,7 +362,6 @@ function renderTablaPosiciones(grupo) {
         return '<div style="padding:20px;text-align:center;color:#8e8e93;">Sin datos del grupo ' + grupo + '</div>';
     }
     
-    // Filtrar partidos del grupo que NO están pendientes (est !== 0 y est !== 1)
     const partidosGrupo = partidosCache.filter(p => 
         p.grupoCalculado === grupo && 
         Number(p.est) !== 0 && 
@@ -378,14 +387,12 @@ function renderTablaPosiciones(grupo) {
                 const est = Number(p.est);
                 
                 if (est === 4) {
-                    // Partido terminado: usar resultado final (t90)
                     const resultado = getResultadoReal(p.id);
                     if (resultado) {
                         golesFavor = esLocal ? resultado.gol_loc : resultado.gol_vis;
                         golesContra = esLocal ? resultado.gol_vis : resultado.gol_loc;
                     }
                 } else if (est === 2 || est === 3) {
-                    // Partido EN VIVO: usar marcador actual (gol_loc, gol_vis)
                     golesFavor = esLocal ? (p.gol_loc || 0) : (p.gol_vis || 0);
                     golesContra = esLocal ? (p.gol_vis || 0) : (p.gol_loc || 0);
                 }
@@ -409,7 +416,6 @@ function renderTablaPosiciones(grupo) {
         eq.pts = (eq.pg * 3) + eq.pe;
     });
     
-    // Ordenar: puntos, diferencia de goles, goles a favor
     equiposGrupo.sort((a, b) => {
         if (a.pts !== b.pts) return b.pts - a.pts;
         if (a.dif !== b.dif) return b.dif - a.dif;
@@ -420,7 +426,7 @@ function renderTablaPosiciones(grupo) {
         <table style="width:100%;border-collapse:collapse;font-size:12px;">
             <thead><tr style="background:#f2f2f7;">
                 <th>Pos</th><th>Equipo</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>GF</th><th>GC</th><th>DG</th><th>PTS</th>
-            </tr></thead>
+             </tr></thead>
             <tbody>`;
     
     equiposGrupo.forEach((eq, idx) => {
@@ -441,7 +447,7 @@ function renderTablaPosiciones(grupo) {
             <td>${eq.gc || 0}</td>
             <td style="color:${(eq.dif || 0) > 0 ? '#34c759' : (eq.dif || 0) < 0 ? '#ff3b30' : '#1c1c1e'}">${(eq.dif || 0) > 0 ? '+' + eq.dif : eq.dif || 0}</td>
             <td style="font-weight:700;color:#007aff;">${eq.pts || 0}</td>
-         </tr>`;
+          </tr>`;
     });
     
     html += `</tbody>
@@ -650,7 +656,6 @@ function detenerCountdown() {
     countdownActivo = false;
 }
 
-// ========== ACTUALIZACIÓN DE MARCADORES EN VIVO ==========
 async function actualizarMarcadoresEnVivo() {
     const cardsEnVivo = document.querySelectorAll('.partido-card[data-est="2"], .partido-card[data-est="3"]');
     if (cardsEnVivo.length === 0) return;
@@ -727,7 +732,6 @@ function scrollAPrimerDestacado() {
     }, 500);
 }
 
-// ========== FUNCIÓN GUARDAR PRONÓSTICO CORREGIDA ==========
 async function guardarPronostico(ptdId, s1, s2) {
     if (!currentJugador) { 
         mostrarToast('Inicia sesión primero', 'err'); 
@@ -977,7 +981,6 @@ async function refrescarContenido() {
     const contenedorScroll = document.getElementById('partidos-contenido-scroll');
     if (!contenedorScroll) return;
     
-    // Asegurar que gruposSeleccion esté cargado
     if (currentJugador) {
         await cargarPronosticos(currentJugador.id, false);
         const especialesData = cargarPronosticosEspecialesLocal();
@@ -1061,7 +1064,6 @@ export async function renderizarPartidos(contenedor, datosCuenta) {
     await cargarPartidos();
     await cargarPronosticos(datosCuenta.id);
     
-    // Cargar gruposSeleccion desde localStorage
     const especialesData = cargarPronosticosEspecialesLocal();
     if (especialesData.grupos) {
         Object.assign(gruposSeleccion, especialesData.grupos);
@@ -1097,3 +1099,6 @@ export async function renderizarPartidos(contenedor, datosCuenta) {
         }
     });
 }
+
+// Exportar funciones necesarias para ahora.js
+export { cargarPartidos, getBandera, formatearHora12h };
