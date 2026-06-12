@@ -1,7 +1,7 @@
 // funciones/ahora.js
-// Pantalla "AHORA" - VERSIÓN CON SOLO CARD 1 VISIBLE
-// - Card 1: Partidos del día (visible)
-// - Card 2 y Card 3: completamente eliminadas del HTML (sin referencias)
+// Pantalla "AHORA" - VERSIÓN CON PARTIDOS DEL DÍA Y GRUPOS CORREGIDOS
+// - Card 1: Partidos del día con grupo correcto (A, B, C, etc.)
+// - Card 2 y Card 3 ocultas (comentadas)
 
 import { simGetFechaStr, simGetHoraStr, onSimuladorCambio } from './lab.js';
 import { getBandera } from './banderas.js';
@@ -10,6 +10,29 @@ import { cargarPronosticosPartidosLocal, guardarPronosticosPartidosLocal } from 
 const BASE = 'https://server.sion.hysintegrar.com/fifa2026/vERP_2_dat_dat/v1';
 const BASE_V2 = 'https://server.sion.hysintegrar.com/fifa2026/vERP_2_dat_dat/v2';
 const KEY = 'SuzvTp4qwXQtAVFJbdzP';
+
+// ========== MAPEO HARCODEADO DE GRUPOS ==========
+const GRUPOS_POR_EQUIPO = {
+    'México': 'A', 'Sudáfrica': 'A', 'República de Corea': 'A', 'Corea': 'A',
+    'Corea del Sur': 'A', 'República Checa': 'A', 'Chequia': 'A',
+    'Canadá': 'B', 'Bosnia': 'B', 'Bosnia y Herzegovina': 'B', 'Catar': 'B', 'Suiza': 'B',
+    'Brasil': 'C', 'Marruecos': 'C', 'Haití': 'C', 'Escocia': 'C',
+    'Estados Unidos': 'D', 'EE. UU.': 'D', 'Paraguay': 'D', 'Australia': 'D', 'Turquía': 'D',
+    'Alemania': 'E', 'Curazao': 'E', 'Costa de Marfil': 'E', 'C. de Marfil': 'E', 'Ecuador': 'E',
+    'Países Bajos': 'F', 'Japón': 'F', 'Suecia': 'F', 'Tunez': 'F',
+    'Bélgica': 'G', 'Egipto': 'G', 'Irán': 'G', 'RI de Irán': 'G', 'Nueva Zelanda': 'G', 'N. Zelanda': 'G',
+    'España': 'H', 'Islas de Cabo Verde': 'H', 'Cabo Verde': 'H', 'Arabia Saudí': 'H', 'Arabia Saudita': 'H', 'Uruguay': 'H',
+    'Francia': 'I', 'Senegal': 'I', 'Irak': 'I', 'Noruega': 'I',
+    'Argentina': 'J', 'Argelia': 'J', 'Austria': 'J', 'Jordania': 'J',
+    'Portugal': 'K', 'RD Congo': 'K', 'República Democrática del Congo': 'K', 'Uzbekistán': 'K', 'Colombia': 'K',
+    'Inglaterra': 'L', 'Croacia': 'L', 'Ghana': 'L', 'Panamá': 'L'
+};
+
+function obtenerGrupoPorEquipo(nombreEquipo) {
+    if (!nombreEquipo) return null;
+    const nombreLimpio = nombreEquipo.trim();
+    return GRUPOS_POR_EQUIPO[nombreLimpio] || null;
+}
 
 let currentContenedor = null;
 let currentDatosCuenta = null;
@@ -58,6 +81,18 @@ async function cargarPartidos() {
         const response = await fetch(`${BASE}/fifa_ptd?api_key=${KEY}&_=${timestamp}`);
         const data = await response.json();
         partidosCache = data.fifa_ptd || [];
+        
+        // Asignar grupo a cada partido
+        partidosCache.forEach(p => {
+            let grupo = obtenerGrupoPorEquipo(p.nom_loc);
+            if (!grupo) {
+                grupo = obtenerGrupoPorEquipo(p.nom_vis);
+            }
+            p.grupoCalculado = grupo;
+            if (!p.grp_for && grupo) {
+                p.grp_for = grupo;
+            }
+        });
         
         const responseReales = await fetch(`${BASE}/fifa_ptd?api_key=${KEY}&filter[est]=4&_=${timestamp}`);
         const dataReales = await responseReales.json();
@@ -158,7 +193,8 @@ function renderizarPartidosDelDia() {
         const mes = meses[fechaObj.getMonth()];
         const horaFormateada = partido.hor ? formatearHora12h(partido.hor) : '';
         
-        const grupoDisplay = partido.grp_for || `Grupo ${partido.grupoCalculado || '?'}`;
+        // Usar grp_for o grupoCalculado
+        const grupoDisplay = partido.grp_for || (partido.grupoCalculado ? `Grupo ${partido.grupoCalculado}` : 'Grupo ?');
         
         let centroHtml = '';
         let borderColor = '#007aff';
