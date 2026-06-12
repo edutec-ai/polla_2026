@@ -1,12 +1,9 @@
 // funciones/ahora.js
-// Pantalla "AHORA" - VERSIÓN CON CARD DE PARTIDOS COMPACTA Y CENTRADA
-// - Card 1: Partidos del día (compacto, centrado, sin desbordamiento)
-// - Card 2: Finalistas (Ciclo 2) - badge PULSO solo si NO ha hecho pronóstico
-// - Card 3: Reglas del juego
-// - Badges: EN VIVO (🔴 EN VIVO) y TERMINADO (🏁 FIN)
+// Pantalla "AHORA" - VERSIÓN CON SOLO CARD 1 VISIBLE
+// - Card 1: Partidos del día (visible)
+// - Card 2 y Card 3: completamente eliminadas del HTML (sin referencias)
 
 import { simGetFechaStr, simGetHoraStr, onSimuladorCambio } from './lab.js';
-import { gruposSeleccion, finalistasSeleccion } from './especiales.js';
 import { getBandera } from './banderas.js';
 import { cargarPronosticosPartidosLocal, guardarPronosticosPartidosLocal } from './sync.js';
 
@@ -104,27 +101,6 @@ function irAPartidos() {
     }
 }
 
-function irAEspeciales(tab) {
-    if (typeof cambiarVistaCallback === 'function') {
-        cambiarVistaCallback('especiales', currentDatosCuenta, tab);
-    }
-}
-
-function navegarAReglas() {
-    if (!cambiarVistaCallback) return;
-    cambiarVistaCallback('reglas', currentDatosCuenta);
-}
-
-function tieneCiclo2Completo() {
-    return !!(finalistasSeleccion.campeon && finalistasSeleccion.subcampeon &&
-        finalistasSeleccion.tercero && finalistasSeleccion.cuarto);
-}
-
-function tieneAlgunFinalista() {
-    return !!(finalistasSeleccion.campeon || finalistasSeleccion.subcampeon ||
-        finalistasSeleccion.tercero || finalistasSeleccion.cuarto);
-}
-
 function getEstadoPartido(partido) {
     const est = Number(partido.est);
     
@@ -174,7 +150,6 @@ function renderizarPartidosDelDia() {
         const estado = getEstadoPartido(partido);
         const resultadoReal = getResultadoReal(partido.id);
         
-        // Formatear fecha compacta
         const fechaObj = new Date(partido.fch);
         const diasSemana = { 0: 'Dom', 1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie', 6: 'Sáb' };
         const meses = { 0: 'Ene', 1: 'Feb', 2: 'Mar', 3: 'Abr', 4: 'May', 5: 'Jun', 6: 'Jul', 7: 'Ago', 8: 'Sep', 9: 'Oct', 10: 'Nov', 11: 'Dic' };
@@ -195,15 +170,15 @@ function renderizarPartidosDelDia() {
                     <span style="font-size: 14px; font-weight: 700; color: #1c1c1e;">${resultadoReal.gol_loc}</span>
                     <span style="font-size: 11px; color: #8e8e93;">-</span>
                     <span style="font-size: 14px; font-weight: 700; color: #1c1c1e;">${resultadoReal.gol_vis}</span>
-                    <span style="background: #34c75920; color: #34c759; padding: 2px 5px; border-radius: 8px; font-size: 8px; font-weight: 600;">${estado.texto}</span>
+                    <span style="background: #34c75920; color: #34c759; padding: 2px 5px; border-radius: 8px; font-size: 8px; font-weight: 600;">FIN</span>
                 </div>
             `;
         } else if (estado.estado === 'envivo') {
             borderColor = '#ff3b30';
             centroHtml = `
                 <div style="display: flex; align-items: center; justify-content: center; gap: 3px;">
-                    <span style="color: #ff3b30; font-size: 10px;">${estado.icono}</span>
-                    <span style="color: #ff3b30; font-size: 10px; font-weight: 600;">${estado.texto}</span>
+                    <span style="color: #ff3b30; font-size: 10px;">🔴</span>
+                    <span style="color: #ff3b30; font-size: 10px; font-weight: 600;">EN VIVO</span>
                 </div>
             `;
         } else {
@@ -216,7 +191,7 @@ function renderizarPartidosDelDia() {
         }
         
         html += `
-            <div style="background: #f9f9fb; border-radius: 12px; padding: 8px 10px; border-left: 3px solid ${borderColor};">
+            <div style="background: #f9f9fb; border-radius: 12px; padding: 8px 10px; border-left: 3px solid ${borderColor}; cursor: pointer;" data-id="${partido.id}">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                     <span style="font-size: 9px; font-weight: 600; color: #8e8e93;">${grupoDisplay}</span>
                     <span style="font-size: 9px; color: #8e8e93;">${diaSemana} ${dia} ${mes} · ${horaFormateada}</span>
@@ -245,23 +220,9 @@ function renderizarPartidosDelDia() {
     return html;
 }
 
-function getBadgeCiclo2() {
-    const ciclo2Completo = tieneCiclo2Completo();
-    const tieneAlguno = tieneAlgunFinalista();
-    
-    if (ciclo2Completo) {
-        return '<div class="ahora-card-badge completado">✅ COMPLETADO</div>';
-    }
-    if (tieneAlguno) {
-        return '<div class="ahora-card-badge pendiente">⚠️ INCOMPLETO</div>';
-    }
-    return '<div class="ahora-card-badge pulso50">🟡 PULSO 50</div>';
-}
-
 async function renderizarAhoraContent() {
     await cargarPartidos();
     
-    const ciclo2Badge = getBadgeCiclo2();
     const partidosDelDiaHtml = renderizarPartidosDelDia();
     
     const html = `
@@ -323,23 +284,6 @@ async function renderizarAhoraContent() {
                 .ahora-card-contenido {
                     padding-left: 52px;
                 }
-                .ahora-card-desc { 
-                    font-size: 12px; 
-                    color: #8e8e93; 
-                    margin-bottom: 8px;
-                }
-                .ahora-card-badge { 
-                    background: #ff9500; 
-                    color: white; 
-                    padding: 2px 10px; 
-                    border-radius: 12px; 
-                    font-size: 9px; 
-                    font-weight: 600; 
-                    display: inline-block;
-                }
-                .ahora-card-badge.completado { background: #34c759; }
-                .ahora-card-badge.pendiente { background: #8e8e93; }
-                .ahora-card-badge.pulso50 { background: #ff9500; }
                 .ahora-footer { 
                     padding: 12px 16px; 
                     text-align: center; 
@@ -358,6 +302,7 @@ async function renderizarAhoraContent() {
             </div>
             
             <div class="ahora-cards">
+                <!-- CARD 1: PARTIDOS DEL DÍA -->
                 <div class="ahora-card" data-accion="partidos">
                     <div class="ahora-card-header">
                         <div class="ahora-card-icono">⚽</div>
@@ -368,33 +313,10 @@ async function renderizarAhoraContent() {
                         ${partidosDelDiaHtml}
                     </div>
                 </div>
-                
-                <div class="ahora-card" data-accion="ciclo2">
-                    <div class="ahora-card-header">
-                        <div class="ahora-card-icono">🏆</div>
-                        <div class="ahora-card-titulo">Los cuatro finalistas</div>
-                        <div class="ahora-card-flecha">→</div>
-                    </div>
-                    <div class="ahora-card-contenido">
-                        <div class="ahora-card-desc">Selecciona Campeón, Subcampeón, Tercero y Cuarto</div>
-                        ${ciclo2Badge}
-                    </div>
-                </div>
-                
-                <div class="ahora-card" data-accion="reglas">
-                    <div class="ahora-card-header">
-                        <div class="ahora-card-icono">📖</div>
-                        <div class="ahora-card-titulo">Reglas del juego</div>
-                        <div class="ahora-card-flecha">→</div>
-                    </div>
-                    <div class="ahora-card-contenido">
-                        <div class="ahora-card-desc">Cómo funciona La Polla, ciclos y sistema de puntos</div>
-                    </div>
-                </div>
             </div>
             
             <div class="ahora-footer">
-                <div class="ahora-footer-text">💡 Sigue tus pronósticos en la TABLA de posiciones</div>
+                <div class="ahora-footer-text">💡 Haz clic en cualquier partido para hacer tu pronóstico</div>
             </div>
         </div>
     `;
@@ -432,12 +354,7 @@ export async function renderizarAhora(contenedor, datosCuenta) {
     contenedor.innerHTML = html;
     
     const cardPartidos = contenedor.querySelector('.ahora-card[data-accion="partidos"]');
-    const cardCiclo2 = contenedor.querySelector('.ahora-card[data-accion="ciclo2"]');
-    const cardReglas = contenedor.querySelector('.ahora-card[data-accion="reglas"]');
-    
     if (cardPartidos) cardPartidos.addEventListener('click', () => irAPartidos());
-    if (cardCiclo2) cardCiclo2.addEventListener('click', () => irAEspeciales('ciclo2'));
-    if (cardReglas) cardReglas.addEventListener('click', () => navegarAReglas());
     
     actualizacionPeriodicaInterval = setInterval(async () => {
         await cargarPronosticos(datosCuenta.id);
@@ -446,11 +363,7 @@ export async function renderizarAhora(contenedor, datosCuenta) {
         if (currentContenedor) {
             currentContenedor.innerHTML = nuevoHtml;
             const newCardPartidos = currentContenedor.querySelector('.ahora-card[data-accion="partidos"]');
-            const newCardCiclo2 = currentContenedor.querySelector('.ahora-card[data-accion="ciclo2"]');
-            const newCardReglas = currentContenedor.querySelector('.ahora-card[data-accion="reglas"]');
             if (newCardPartidos) newCardPartidos.addEventListener('click', () => irAPartidos());
-            if (newCardCiclo2) newCardCiclo2.addEventListener('click', () => irAEspeciales('ciclo2'));
-            if (newCardReglas) newCardReglas.addEventListener('click', () => navegarAReglas());
         }
     }, 60000);
 }
