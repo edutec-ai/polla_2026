@@ -1,11 +1,8 @@
 // funciones/especiales.js
-// Módulo de Apuestas Especiales - VERSIÓN FINAL CORREGIDA
-// - SOLO dos pestañas: CICLO 1 y CICLO 2
-// - Botones de guardar integrados dentro de cada ciclo (2 líneas: 💾 Guardar / Ciclo X)
-// - CORREGIDO: CICLO 1 ya NO envía finalistas como 0 (NO sobrescribe)
-// - CORREGIDO: CICLO 2 ya NO envía grupos como 0 (NO sobrescribe)
-// - En CICLO 1: guarda solo grupos, respeta finalistas existentes en Velneo
-// - En CICLO 2: guarda solo finalistas, respeta grupos existentes en Velneo
+// Módulo de Apuestas Especiales - VERSIÓN FINAL CON BLOQUEO DE CICLO 1
+// - Exporta gruposSeleccion para compatibilidad con partidos.js
+// - CICLO 1 se bloquea automáticamente después del partido inaugural
+// - Cuando está bloqueado: dropdowns deshabilitados, botón guardar oculto
 
 import { onSimuladorCambio, simGetFechaStr, simGetHoraStr } from './lab.js';
 import { getBandera, getNombreVisual } from './banderas.js';
@@ -35,7 +32,7 @@ const GRUPOS_LISTA = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'
 let GRUPOS_EQUIPOS = {};
 let equiposCache = [];
 
-// Estado de selecciones del usuario
+// Estado de selecciones del usuario (EXPORTADO para partidos.js)
 export let gruposSeleccion = {};
 export let finalistasSeleccion = {
   campeon: null,
@@ -268,7 +265,7 @@ function actualizarEstadoVentanas() {
   estadoVentanas.ciclo2Pulso = ciclo2Pulso;
   estadoVentanas.ciclo2Bloqueado = ciclo2Bloqueado;
   
-  console.log('[Especiales] Ventanas actualizadas');
+  console.log('[Especiales] Ventanas actualizadas - ciclo1Bloqueado:', ciclo1Bloqueado);
 }
 
 function getBadgePulsoHTML() {
@@ -333,7 +330,6 @@ function renderResumenFinalistasParaModal() {
 // 3. MODALES DE CONFIRMACION
 // ─────────────────────────────────────────────────────────────
 
-// MODAL CICLO 1: SOLO GRUPOS
 function mostrarModalConfirmacionCiclo1(callback) {
   const gruposCompletados = Object.keys(gruposSeleccion).filter(g => {
     const sel = gruposSeleccion[g];
@@ -393,7 +389,6 @@ function mostrarModalConfirmacionCiclo1(callback) {
   modal.addEventListener('click', (e) => { if (e.target === modal) cerrar(); });
 }
 
-// MODAL CICLO 2: SOLO FINALISTAS
 function mostrarModalConfirmacionCiclo2(callback) {
   const finalistasCompletados = Object.values(finalistasSeleccion).filter(v => v !== null).length;
   
@@ -476,17 +471,60 @@ function validarSeleccionFinalista(key, valor) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// 5. RENDERIZADO DE SELECCIONADORES
+// 5. RENDERIZADO DE SELECCIONADORES (CON BLOQUEO)
 // ─────────────────────────────────────────────────────────────
 
 function renderGrupoSelector(grupo) {
   const sel = gruposSeleccion[grupo] || {};
   const equipos = GRUPOS_EQUIPOS[grupo] || [];
+  const bloqueado = estadoVentanas.ciclo1Bloqueado === true;
   
   if (equipos.length === 0) {
     return `<div class="esp-grupo-panel">Cargando equipos del grupo ${grupo}...</div>`;
   }
   
+  // MODO BLOQUEADO - Solo muestra valores, sin interactividad
+  if (bloqueado) {
+    const valor1 = sel[1] ? getBandera(sel[1]) + ' ' + getNombreVisual(sel[1]) : '<span style="color:#ff3b30;">❌ No seleccionado</span>';
+    const valor2 = sel[2] ? getBandera(sel[2]) + ' ' + getNombreVisual(sel[2]) : '<span style="color:#ff3b30;">❌ No seleccionado</span>';
+    
+    return `
+      <div class="esp-grupo-panel" data-grupo="${grupo}" style="opacity:0.8;">
+        <div class="esp-grupo-header">
+          <span class="esp-grupo-titulo">📋 Grupo ${grupo} 🔒</span>
+        </div>
+        
+        <div class="esp-equipos-lista">
+          ${equipos.map(eq => `
+            <div class="esp-equipo-item">
+              <div class="esp-bandera">${getBandera(eq)}</div>
+              <div class="esp-nombre">${getNombreVisual(eq)}</div>
+            </div>
+          `).join('')}
+        </div>
+        
+        <div class="esp-posicion-row">
+          <div class="esp-posicion-label">1°</div>
+          <div class="esp-selector-disabled" style="background:#f2f2f7; border-radius:12px; padding:12px 14px; color:#8e8e93;">
+            ${valor1}
+          </div>
+        </div>
+        
+        <div class="esp-posicion-row">
+          <div class="esp-posicion-label">2°</div>
+          <div class="esp-selector-disabled" style="background:#f2f2f7; border-radius:12px; padding:12px 14px; color:#8e8e93;">
+            ${valor2}
+          </div>
+        </div>
+        
+        <div style="margin-top:12px; text-align:center; font-size:11px; color:#ff3b30;">
+          🔒 Ciclo cerrado · No se aceptan más pronósticos
+        </div>
+      </div>
+    `;
+  }
+  
+  // MODO EDITABLE
   return `
     <div class="esp-grupo-panel" data-grupo="${grupo}">
       <div class="esp-grupo-header">
@@ -588,26 +626,38 @@ function renderCiclo1Content() {
   }
   
   const tiempoRestante = calcularTiempoRestanteCiclo1();
+  const bloqueado = estadoVentanas.ciclo1Bloqueado === true;
   
   return `
     <div>
       <div style="background: #f2f2f7; border-radius: 16px; padding: 12px 16px; margin-bottom: 12px;">
         <strong style="display:block; margin-bottom:4px; font-size:16px; color:#8B0000;">LOS DOS MEJORES DE CADA GRUPO</strong>
         <div style="margin-bottom:12px;">
-          <span style="background:rgba(255,255,255,0.8); border-radius:20px; padding:4px 12px; font-size:11px; font-weight:600; color:#ff9500;">⏱️ Faltan ${tiempoRestante} para seleccionar las parejas</span>
+          ${!bloqueado ? `
+            <span style="background:rgba(255,255,255,0.8); border-radius:20px; padding:4px 12px; font-size:11px; font-weight:600; color:#ff9500;">⏱️ Faltan ${tiempoRestante} para seleccionar las parejas</span>
+          ` : `
+            <span style="background:#ff3b3020; border-radius:20px; padding:4px 12px; font-size:11px; font-weight:600; color:#ff3b30;">🔒 Ciclo cerrado</span>
+          `}
         </div>
         
-        <!-- TABLA 2 COLUMNAS: PUNTOS + BOTÓN GUARDAR -->
+        <!-- TABLA 2 COLUMNAS: PUNTOS + BOTÓN GUARDAR (oculto si está bloqueado) -->
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
           <div style="flex: 1; text-align: left;">
             <div>• Si acierta en el orden: <span style="background:#ffcc00; color:#1c1c1e; padding:2px 8px; border-radius:12px; font-weight:700;">60 pts</span></div>
             <div style="margin-top: 4px;">• En desorden: <span style="background:#ffcc00; color:#1c1c1e; padding:2px 8px; border-radius:12px; font-weight:700;">30 pts</span></div>
           </div>
           <div>
-            <button id="btn-guardar-ciclo1" style="background: #34c759; color: white; border: none; border-radius: 14px; padding: 8px 16px; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; flex-direction: column; align-items: center; line-height: 1.3;">
-  <span>💾 Guardar</span>
-  <span>Ciclo 1</span>
-</button>
+            ${!bloqueado ? `
+              <button id="btn-guardar-ciclo1" style="background: #34c759; color: white; border: none; border-radius: 14px; padding: 8px 16px; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; flex-direction: column; align-items: center; line-height: 1.3;">
+                <span>💾 Guardar</span>
+                <span>Ciclo 1</span>
+              </button>
+            ` : `
+              <div style="background: #8e8e93; color: white; border-radius: 14px; padding: 8px 16px; font-size: 13px; font-weight: 700; display: flex; flex-direction: column; align-items: center; line-height: 1.3; opacity: 0.6; cursor: not-allowed;">
+                <span>🔒 Cerrado</span>
+                <span>Ciclo 1</span>
+              </div>
+            `}
           </div>
         </div>
       </div>
@@ -642,9 +692,9 @@ function renderCiclo2Content() {
           </div>
           <div>
             <button id="btn-guardar-ciclo2" style="background: #34c759; color: white; border: none; border-radius: 14px; padding: 8px 16px; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; flex-direction: column; align-items: center; line-height: 1.3;">
-  <span>💾 Guardar</span>
-  <span>Ciclo 2</span>
-</button>
+              <span>💾 Guardar</span>
+              <span>Ciclo 2</span>
+            </button>
           </div>
         </div>
       </div>
@@ -778,40 +828,42 @@ function setupEventListeners() {
     }
   });
   
-  // Selectores de grupos
-  document.querySelectorAll('.esp-selector[data-grupo]').forEach(selector => {
-    const btn = selector.querySelector('.esp-selector-btn');
-    const dropdown = selector.querySelector('.esp-dropdown-menu');
-    const grupo = selector.dataset.grupo;
-    const pos = parseInt(selector.dataset.pos);
-    
-    if (btn && dropdown) {
-      const newBtn = btn.cloneNode(true);
-      btn.parentNode.replaceChild(newBtn, btn);
+  // Selectores de grupos (solo se agregan si no está bloqueado)
+  if (!estadoVentanas.ciclo1Bloqueado) {
+    document.querySelectorAll('.esp-selector[data-grupo]').forEach(selector => {
+      const btn = selector.querySelector('.esp-selector-btn');
+      const dropdown = selector.querySelector('.esp-dropdown-menu');
+      const grupo = selector.dataset.grupo;
+      const pos = parseInt(selector.dataset.pos);
       
-      newBtn.onclick = (e) => {
-        e.stopPropagation();
-        cerrarTodosDropdowns();
-        dropdown.classList.add('open');
-        console.log(`[Especiales] Abriendo dropdown Grupo ${grupo} Posición ${pos}`);
-      };
-      
-      dropdown.querySelectorAll('.esp-dropdown-item').forEach(item => {
-        const newItem = item.cloneNode(true);
-        item.parentNode.replaceChild(newItem, item);
+      if (btn && dropdown) {
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
         
-        newItem.onclick = (e) => {
+        newBtn.onclick = (e) => {
           e.stopPropagation();
-          const valor = newItem.dataset.value;
-          console.log(`[Especiales] Seleccionado: Grupo ${grupo} Pos ${pos} = ${valor}`);
-          seleccionarEquipoGrupo(grupo, pos, valor);
           cerrarTodosDropdowns();
+          dropdown.classList.add('open');
+          console.log(`[Especiales] Abriendo dropdown Grupo ${grupo} Posición ${pos}`);
         };
-      });
-    }
-  });
+        
+        dropdown.querySelectorAll('.esp-dropdown-item').forEach(item => {
+          const newItem = item.cloneNode(true);
+          item.parentNode.replaceChild(newItem, item);
+          
+          newItem.onclick = (e) => {
+            e.stopPropagation();
+            const valor = newItem.dataset.value;
+            console.log(`[Especiales] Seleccionado: Grupo ${grupo} Pos ${pos} = ${valor}`);
+            seleccionarEquipoGrupo(grupo, pos, valor);
+            cerrarTodosDropdowns();
+          };
+        });
+      }
+    });
+  }
   
-  // Selectores de finalistas
+  // Selectores de finalistas (siempre activos)
   document.querySelectorAll('.esp-selector[data-finalista]').forEach(selector => {
     const btn = selector.querySelector('.esp-selector-btn');
     const dropdown = selector.querySelector('.esp-dropdown-menu');
@@ -846,14 +898,16 @@ function setupEventListeners() {
   });
   
   // ========== BOTÓN GUARDAR CICLO 1 ==========
-  const btnGuardarCiclo1 = document.getElementById('btn-guardar-ciclo1');
-  if (btnGuardarCiclo1) {
-    const newBtn = btnGuardarCiclo1.cloneNode(true);
-    btnGuardarCiclo1.parentNode.replaceChild(newBtn, btnGuardarCiclo1);
-    
-    newBtn.onclick = () => {
-      mostrarModalConfirmacionCiclo1(() => guardarEspecialesPorCiclo('ciclo1'));
-    };
+  if (!estadoVentanas.ciclo1Bloqueado) {
+    const btnGuardarCiclo1 = document.getElementById('btn-guardar-ciclo1');
+    if (btnGuardarCiclo1) {
+      const newBtn = btnGuardarCiclo1.cloneNode(true);
+      btnGuardarCiclo1.parentNode.replaceChild(newBtn, btnGuardarCiclo1);
+      
+      newBtn.onclick = () => {
+        mostrarModalConfirmacionCiclo1(() => guardarEspecialesPorCiclo('ciclo1'));
+      };
+    }
   }
   
   // ========== BOTÓN GUARDAR CICLO 2 ==========
@@ -867,45 +921,47 @@ function setupEventListeners() {
     };
   }
   
-  // Actualizar countdown de Ciclo 1 periódicamente
+  // Actualizar countdown de Ciclo 1 periódicamente (solo si no está bloqueado)
   if (window.ciclo1CountdownInterval) clearInterval(window.ciclo1CountdownInterval);
-  window.ciclo1CountdownInterval = setInterval(() => {
-    if (tabActivo === 'ciclo1') {
-      const zona3Content = document.getElementById('esp-zona3-contenido');
-      if (zona3Content && zona3Content.innerHTML.includes('Faltan')) {
-        function calcularTiempoRestanteCiclo1() {
-          const fechaActual = new Date();
-          const fechaCierre = new Date(2026, 5, 11, 14, 0, 0);
-          const diffMs = fechaCierre - fechaActual;
+  if (!estadoVentanas.ciclo1Bloqueado) {
+    window.ciclo1CountdownInterval = setInterval(() => {
+      if (tabActivo === 'ciclo1') {
+        const zona3Content = document.getElementById('esp-zona3-contenido');
+        if (zona3Content && zona3Content.innerHTML.includes('Faltan')) {
+          function calcularTiempoRestanteCiclo1() {
+            const fechaActual = new Date();
+            const fechaCierre = new Date(2026, 5, 11, 14, 0, 0);
+            const diffMs = fechaCierre - fechaActual;
+            
+            if (diffMs <= 0) return 'CERRADO';
+            
+            const diffSegundos = Math.floor(diffMs / 1000);
+            const dias = Math.floor(diffSegundos / 86400);
+            const horas = Math.floor((diffSegundos % 86400) / 3600);
+            const minutos = Math.floor((diffSegundos % 3600) / 60);
+            
+            const partes = [];
+            if (dias > 0) partes.push(`${dias}d`);
+            if (horas > 0) partes.push(`${horas}h`);
+            if (minutos > 0) partes.push(`${minutos}m`);
+            
+            if (partes.length === 0) return '<1m';
+            return partes.join(' ');
+          }
           
-          if (diffMs <= 0) return 'CERRADO';
-          
-          const diffSegundos = Math.floor(diffMs / 1000);
-          const dias = Math.floor(diffSegundos / 86400);
-          const horas = Math.floor((diffSegundos % 86400) / 3600);
-          const minutos = Math.floor((diffSegundos % 3600) / 60);
-          
-          const partes = [];
-          if (dias > 0) partes.push(`${dias}d`);
-          if (horas > 0) partes.push(`${horas}h`);
-          if (minutos > 0) partes.push(`${minutos}m`);
-          
-          if (partes.length === 0) return '<1m';
-          return partes.join(' ');
-        }
-        
-        const tiempoRestante = calcularTiempoRestanteCiclo1();
-        const countdownSpan = document.querySelector('#esp-zona3-contenido span[style*="background:rgba(255,255,255,0.8)"]');
-        if (countdownSpan) {
-          countdownSpan.textContent = `⏱️ Faltan ${tiempoRestante} para seleccionar las parejas`;
+          const tiempoRestante = calcularTiempoRestanteCiclo1();
+          const countdownSpan = document.querySelector('#esp-zona3-contenido span[style*="background:rgba(255,255,255,0.8)"]');
+          if (countdownSpan) {
+            countdownSpan.textContent = `⏱️ Faltan ${tiempoRestante} para seleccionar las parejas`;
+          }
         }
       }
-    }
-  }, 1000);
+    }, 1000);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
-// 9. GUARDAR EN API (CORREGIDO - NO ENVÍA CAMPOS QUE NO SE MODIFICAN)
+// 9. GUARDAR EN API
 // ─────────────────────────────────────────────────────────────
 
 async function guardarEspecialesPorCiclo(ciclo) {
@@ -923,13 +979,9 @@ async function guardarEspecialesPorCiclo(ciclo) {
       const sel = gruposSeleccion[grupo] || {};
       const clf1 = sel[1] ? getEquipoIdPorNombre(sel[1]) : 0;
       const clf2 = sel[2] ? getEquipoIdPorNombre(sel[2]) : 0;
-      // Solo enviar si hay valor (evita enviar 0 innecesarios)
       if (clf1 !== 0) payload[`grp_${grupo.toLowerCase()}_clf1`] = clf1;
       if (clf2 !== 0) payload[`grp_${grupo.toLowerCase()}_clf2`] = clf2;
     });
-    
-    // IMPORTANTE: NO enviamos cam, sub, ter, cua
-    // Así Velneo mantiene los valores existentes de finalistas
     
   } else if (ciclo === 'ciclo2') {
     console.log('[Especiales] Guardando solo CICLO 2 (Finalistas)');
@@ -950,14 +1002,10 @@ async function guardarEspecialesPorCiclo(ciclo) {
       const cuaId = getEquipoIdPorNombre(finalistasSeleccion.cuarto);
       if (cuaId) payload.cua = cuaId;
     }
-    
-    // IMPORTANTE: NO enviamos grp_X_clf1, grp_X_clf2
-    // Así Velneo mantiene los valores existentes de grupos
   }
   
   console.log(`[Especiales] Enviando payload (${ciclo}):`, payload);
   
-  // Si el payload solo tiene { id }, no hay nada que guardar
   if (Object.keys(payload).length === 1) {
     mostrarToast('⚠️ No hay cambios para guardar', 'err');
     return;
