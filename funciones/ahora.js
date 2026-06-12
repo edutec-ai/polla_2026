@@ -1,7 +1,7 @@
 // funciones/ahora.js
-// Pantalla "AHORA" - VERSIÓN CON PARTIDOS DEL DÍA Y GRUPOS CORREGIDOS
-// - Card 1: Partidos del día con grupo correcto (A, B, C, etc.)
-// - Card 2 y Card 3 ocultas (comentadas)
+// Pantalla "AHORA" - VERSIÓN CON MARCADOR EN VIVO
+// - Card 1: Partidos del día con grupo correcto
+// - EN VIVO: muestra marcador actual (gol_loc - gol_vis)
 
 import { simGetFechaStr, simGetHoraStr, onSimuladorCambio } from './lab.js';
 import { getBandera } from './banderas.js';
@@ -193,7 +193,6 @@ function renderizarPartidosDelDia() {
         const mes = meses[fechaObj.getMonth()];
         const horaFormateada = partido.hor ? formatearHora12h(partido.hor) : '';
         
-        // Usar grp_for o grupoCalculado
         const grupoDisplay = partido.grp_for || (partido.grupoCalculado ? `Grupo ${partido.grupoCalculado}` : 'Grupo ?');
         
         let centroHtml = '';
@@ -211,10 +210,16 @@ function renderizarPartidosDelDia() {
             `;
         } else if (estado.estado === 'envivo') {
             borderColor = '#ff3b30';
+            // Mostrar marcador actual (gol_loc, gol_vis)
+            const golLocal = partido.gol_loc || 0;
+            const golVisita = partido.gol_vis || 0;
             centroHtml = `
-                <div style="display: flex; align-items: center; justify-content: center; gap: 3px;">
-                    <span style="color: #ff3b30; font-size: 10px;">🔴</span>
-                    <span style="color: #ff3b30; font-size: 10px; font-weight: 600;">EN VIVO</span>
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                    <div style="font-size: 16px; font-weight: 700; color: #ff3b30;">${golLocal} - ${golVisita}</div>
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 3px; margin-top: 2px;">
+                        <span style="color: #ff3b30; font-size: 9px;">🔴</span>
+                        <span style="color: #ff3b30; font-size: 9px; font-weight: 600;">EN VIVO</span>
+                    </div>
                 </div>
             `;
         } else {
@@ -239,7 +244,7 @@ function renderizarPartidosDelDia() {
                         <span style="font-size: 10px; font-weight: 500; color: #1c1c1e; text-align: center; word-break: break-word; max-width: 80px; line-height: 1.2;">${partido.nom_loc}</span>
                     </div>
                     
-                    <div style="flex-shrink: 0; min-width: 65px; text-align: center;">
+                    <div style="flex-shrink: 0; min-width: 70px; text-align: center;">
                         ${centroHtml}
                     </div>
                     
