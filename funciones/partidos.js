@@ -1,6 +1,6 @@
 // funciones/partidos.js
 // Módulo de Partidos - La Polla Mundialista 2026
-// VERSIÓN CON BADGES SIMPLIFICADOS: EN VIVO y TERMINADO
+// VERSIÓN DEFINITIVA - CON FEEDBACK INMEDIATO Y CORRECCIÓN DE GUARDADO
 // - Tabs: TODOS, GRUPOS, COLOMBIA
 // - Tab TODOS muestra SOLO fase de grupos (72 partidos)
 // - Control por `est` (Velneo): 1=Antes del partido, 2/3=EN VIVO, 4=TERMINADO
@@ -11,9 +11,9 @@
 // - Modal con fondo de estadio CSS puro (sin imágenes)
 // - CORREGIDO: Inputs tipo text con inputmode numeric para Android
 // - CORREGIDO: Gap reducido entre botones y inputs
-// - NUEVO: Feedback inmediato al guardar (muestra el marcador temporal)
-// - NUEVO: Sincronización en segundo plano cada 30 segundos
-// - NUEVO: Badges simplificados: solo EN VIVO (est=2/3) y TERMINADO (est=4)
+// - CORREGIDO: Feedback inmediato al guardar (muestra el marcador temporal)
+// - CORREGIDO: El modal se cierra ANTES de guardar para mostrar feedback en la card
+// - CORREGIDO: El cache se actualiza inmediatamente después del POST exitoso
 
 import { onSimuladorCambio, simGetFechaStr, simGetHoraStr } from './lab.js';
 import { gruposSeleccion } from './especiales.js';
@@ -624,34 +624,59 @@ function scrollAPrimerDestacado() {
     }, 500);
 }
 
+// ========== FUNCIÓN GUARDAR PRONÓSTICO CORREGIDA ==========
 async function guardarPronostico(ptdId, s1, s2) {
-    if (!currentJugador) { mostrarToast('Inicia sesión primero', 'err'); return; }
+    if (!currentJugador) { 
+        mostrarToast('Inicia sesión primero', 'err'); 
+        return; 
+    }
+    
+    // Mostrar feedback inmediato en la card
     iniciarSincronizacionPeriodica(ptdId, s1, s2);
     actualizarCardPartido(ptdId, s1, s2);
     mostrarToast('💾 Guardando...', 'info');
+    
     try {
         const response = await fetch(`${BASE_V2}/_process/API_PUT_PAR?api_key=${KEY}`, {
             method: 'POST', headers: { 'Content-Type': 'text/plain' },
             body: JSON.stringify({ jug: currentJugador.id, id: ptdId, pro_gol_loc: s1, pro_gol_vis: s2, pro_res: s1 > s2 ? '1' : s2 > s1 ? '2' : 'X' })
         });
+        
         if (response.ok) { 
+            // ✅ Actualizar cache inmediatamente
             pronosticosCache[ptdId] = { s1, s2 };
             actualizarLocalStorage();
             mostrarToast('✅ Pronóstico guardado', 'ok');
-            if (ptdId === 1 && globalCambiarVistaCallback) {
-                setTimeout(() => { globalCambiarVistaCallback('ahora', currentJugador); }, 1500);
+            
+            // ✅ Limpiar temporal y timeout
+            tempPronosticos.delete(ptdId);
+            if (syncIntervals.has(ptdId)) {
+                clearTimeout(syncIntervals.get(ptdId));
+                syncIntervals.delete(ptdId);
             }
-            setTimeout(() => { if (tempPronosticos.has(ptdId)) sincronizarConVelneo(ptdId); }, 2000);
+            
+            // Volver a AHORA si es el partido inaugural
+            if (ptdId === 1 && globalCambiarVistaCallback) {
+                setTimeout(() => { 
+                    globalCambiarVistaCallback('ahora', currentJugador); 
+                }, 1500);
+            }
         } else {
             mostrarToast('❌ Error al guardar', 'err');
             tempPronosticos.delete(ptdId);
-            if (syncIntervals.has(ptdId)) { clearTimeout(syncIntervals.get(ptdId)); syncIntervals.delete(ptdId); }
+            if (syncIntervals.has(ptdId)) { 
+                clearTimeout(syncIntervals.get(ptdId)); 
+                syncIntervals.delete(ptdId); 
+            }
         }
     } catch (error) { 
         console.error('Error al guardar:', error);
         mostrarToast('❌ Error de conexión', 'err');
         tempPronosticos.delete(ptdId);
-        if (syncIntervals.has(ptdId)) { clearTimeout(syncIntervals.get(ptdId)); syncIntervals.delete(ptdId); }
+        if (syncIntervals.has(ptdId)) { 
+            clearTimeout(syncIntervals.get(ptdId)); 
+            syncIntervals.delete(ptdId); 
+        }
     }
 }
 
@@ -820,12 +845,14 @@ function abrirModal(partido, fechaSim, horaSim) {
     validarInputNumerico(s1Input);
     validarInputNumerico(s2Input);
     
+    // ========== BOTÓN GUARDAR CORREGIDO ==========
+    // Cierra el modal ANTES de guardar para que el feedback se vea en la card
     if (guardarBtn) {
         guardarBtn.onclick = () => { 
             const s1 = parseInt(s1Input?.value) || 0; 
             const s2 = parseInt(s2Input?.value) || 0; 
+            overlay.remove();  // ← Cerrar modal primero
             guardarPronostico(partido.id, s1, s2); 
-            overlay.remove(); 
         };
     }
     
