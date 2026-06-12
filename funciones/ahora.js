@@ -1,51 +1,150 @@
-// funciones/ahora.js
-// Pantalla "AHORA" - VERSIÓN CON MARCADOR EN VIVO
-// - Card 1: Partidos del día con grupo correcto
-// - EN VIVO: muestra marcador actual (gol_loc - gol_vis)
+// ahora.js - Módulo de partidos de hoy
+// Muestra SOLO los partidos programados para la fecha actual con countdowns
 
-import { simGetFechaStr, simGetHoraStr, onSimuladorCambio } from './lab.js';
-import { getBandera } from './banderas.js';
-import { cargarPronosticosPartidosLocal, guardarPronosticosPartidosLocal } from './sync.js';
+import { cargarPartidos, getBandera, formatearHora12h } from './partidos.js';
 
-const BASE = 'https://server.sion.hysintegrar.com/fifa2026/vERP_2_dat_dat/v1';
-const BASE_V2 = 'https://server.sion.hysintegrar.com/fifa2026/vERP_2_dat_dat/v2';
-const KEY = 'SuzvTp4qwXQtAVFJbdzP';
-
-// ========== MAPEO HARCODEADO DE GRUPOS ==========
-const GRUPOS_POR_EQUIPO = {
-    'México': 'A', 'Sudáfrica': 'A', 'República de Corea': 'A', 'Corea': 'A',
-    'Corea del Sur': 'A', 'República Checa': 'A', 'Chequia': 'A',
-    'Canadá': 'B', 'Bosnia': 'B', 'Bosnia y Herzegovina': 'B', 'Catar': 'B', 'Suiza': 'B',
-    'Brasil': 'C', 'Marruecos': 'C', 'Haití': 'C', 'Escocia': 'C',
-    'Estados Unidos': 'D', 'EE. UU.': 'D', 'Paraguay': 'D', 'Australia': 'D', 'Turquía': 'D',
-    'Alemania': 'E', 'Curazao': 'E', 'Costa de Marfil': 'E', 'C. de Marfil': 'E', 'Ecuador': 'E',
-    'Países Bajos': 'F', 'Japón': 'F', 'Suecia': 'F', 'Tunez': 'F',
-    'Bélgica': 'G', 'Egipto': 'G', 'Irán': 'G', 'RI de Irán': 'G', 'Nueva Zelanda': 'G', 'N. Zelanda': 'G',
-    'España': 'H', 'Islas de Cabo Verde': 'H', 'Cabo Verde': 'H', 'Arabia Saudí': 'H', 'Arabia Saudita': 'H', 'Uruguay': 'H',
-    'Francia': 'I', 'Senegal': 'I', 'Irak': 'I', 'Noruega': 'I',
-    'Argentina': 'J', 'Argelia': 'J', 'Austria': 'J', 'Jordania': 'J',
-    'Portugal': 'K', 'RD Congo': 'K', 'República Democrática del Congo': 'K', 'Uzbekistán': 'K', 'Colombia': 'K',
-    'Inglaterra': 'L', 'Croacia': 'L', 'Ghana': 'L', 'Panamá': 'L'
-};
-
-function obtenerGrupoPorEquipo(nombreEquipo) {
-    if (!nombreEquipo) return null;
-    const nombreLimpio = nombreEquipo.trim();
-    return GRUPOS_POR_EQUIPO[nombreLimpio] || null;
-}
-
-let currentContenedor = null;
-let currentDatosCuenta = null;
-let actualizacionPeriodicaInterval = null;
-let cambiarVistaCallback = null;
+let currentJugador = null;
 let pronosticosCache = {};
-let partidosCache = [];
-let resultadosRealesCache = {};
 
-export function setCambiarVistaCallback(callback) {
-    cambiarVistaCallback = callback;
+// ========== CALLBACK PARA CAMBIAR VISTA ==========
+let globalCambiarVistaCallback = null;
+
+function setCambiarVistaCallback(callback) {
+    globalCambiarVistaCallback = callback;
 }
 
+// ========== SUSCRIPCIÓN AL SIMULADOR ==========
+let simuladorSuscrito = false;
+let simuladorCallback = null;
+
+function suscribirAhoraAlSimulador(callback) {
+    if (!simuladorSuscrito && typeof callback === 'function') {
+        simuladorSuscrito = true;
+        simuladorCallback = callback;
+        console.log('[Ahora] Suscrito al simulador');
+    }
+}
+
+// Función para refrescar cuando el simulador cambie
+function refrescarAhora() {
+    const contenedor = document.getElementById('ahora-contenedor');
+    if (contenedor && currentJugador) {
+        renderizarAhora(contenedor, currentJugador);
+    }
+}
+
+// ========== CORRECCIÓN DE FECHAS SEGÚN VELNEO ==========
+function corregirFechasSegunVelneo(partidos) {
+    return partidos.map(p => {
+        // Canadá vs Bosnia → 12/06/2026 14:00
+        if ((p.nom_loc === 'Canadá' && p.nom_vis === 'Bosnia') ||
+            (p.nom_loc === 'Bosnia' && p.nom_vis === 'Canadá')) {
+            return { ...p, fch: '2026-06-12', hor: '14:00:00', est: 1 };
+        }
+        // EE.UU. vs Paraguay → 12/06/2026 20:00
+        if ((p.nom_loc === 'EE. UU.' && p.nom_vis === 'Paraguay') ||
+            (p.nom_loc === 'Paraguay' && p.nom_vis === 'EE. UU.')) {
+            return { ...p, fch: '2026-06-12', hor: '20:00:00', est: 1 };
+        }
+        return p;
+    });
+}
+
+// ========== FILTRAR SOLO PARTIDOS DE HOY ==========
+function obtenerPartidosDeHoy(partidos) {
+    const hoy = new Date().toISOString().split('T')[0]; // 2026-06-12
+    return partidos.filter(p => {
+        const fechaPartido = p.fch?.split('T')[0];
+        // Solo partidos de hoy que NO están terminados (est !== 4)
+        return fechaPartido === hoy && Number(p.est) !== 4;
+    });
+}
+
+// ========== CALCULAR COUNTDOWN ==========
+function calcularCountdown(fechaPartido, horaPartido) {
+    const ahora = new Date();
+    const [year, month, day] = fechaPartido.split('-');
+    const [hour, minute] = horaPartido.split(':');
+    const fechaObj = new Date(year, month - 1, day, hour, minute, 0);
+    const diffMs = fechaObj - ahora;
+    
+    if (diffMs <= 0) {
+        return { texto: '🟡 YA COMENZÓ', negativo: true };
+    }
+    
+    const horas = Math.floor(diffMs / (1000 * 60 * 60));
+    const minutos = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (horas >= 24) {
+        const dias = Math.floor(horas / 24);
+        const horasRest = horas % 24;
+        return { 
+            texto: `⏱️ Faltan ${dias} día${dias > 1 ? 's' : ''} y ${horasRest} ${horasRest === 1 ? 'hora' : 'horas'}`,
+            negativo: false 
+        };
+    }
+    
+    if (horas === 0 && minutos === 0) {
+        return { texto: '⏱️ Faltan menos de un minuto', negativo: false };
+    }
+    
+    if (horas === 0) {
+        return { 
+            texto: `⏱️ Faltan ${minutos} ${minutos === 1 ? 'minuto' : 'minutos'}`,
+            negativo: false 
+        };
+    }
+    
+    return { 
+        texto: `⏱️ Faltan ${horas} ${horas === 1 ? 'hora' : 'horas'} y ${minutos} ${minutos === 1 ? 'minuto' : 'minutos'}`,
+        negativo: false 
+    };
+}
+
+// ========== ACTUALIZAR COUNTDOWNS EN TIEMPO REAL ==========
+let countdownInterval = null;
+let countdownActivo = false;
+
+function actualizarCountdownsEnCards() {
+    const countdownElements = document.querySelectorAll('.ahora-countdown');
+    if (countdownElements.length === 0) return;
+    
+    countdownElements.forEach(el => {
+        const fechaPartido = el.dataset.fch;
+        const horaPartido = el.dataset.hor;
+        if (fechaPartido && horaPartido) {
+            const countdown = calcularCountdown(fechaPartido, horaPartido);
+            if (countdown) {
+                el.textContent = countdown.texto;
+                if (countdown.negativo) {
+                    el.style.color = '#ff3b30';
+                } else {
+                    el.style.color = '#ff9500';
+                }
+            }
+        }
+    });
+}
+
+function iniciarCountdownAhora() {
+    if (countdownInterval) clearInterval(countdownInterval);
+    countdownInterval = setInterval(() => {
+        if (!document.hidden && countdownActivo) {
+            actualizarCountdownsEnCards();
+        }
+    }, 1000);
+    countdownActivo = true;
+}
+
+function detenerCountdownAhora() {
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+    }
+    countdownActivo = false;
+}
+
+// ========== MOSTRAR TOAST ==========
 function mostrarToast(msg, tipo) {
     const toast = document.getElementById('app-toast');
     if (toast) {
@@ -56,363 +155,285 @@ function mostrarToast(msg, tipo) {
     }
 }
 
-function obtenerFechaReal() {
-    const ahora = new Date();
-    const year = ahora.getFullYear();
-    const month = String(ahora.getMonth() + 1).padStart(2, '0');
-    const day = String(ahora.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-}
-
-function formatearHora12h(horaStr) {
-    if (!horaStr) return '';
-    const horaLimpia = horaStr.split(':').slice(0, 2).join(':');
-    const [hora, minuto] = horaLimpia.split(':');
-    let horaNum = parseInt(hora);
-    const periodo = horaNum >= 12 ? 'pm' : 'am';
-    if (horaNum > 12) horaNum -= 12;
-    if (horaNum === 0) horaNum = 12;
-    return `${horaNum}:${minuto}`;
-}
-
-async function cargarPartidos() {
-    try {
-        const timestamp = Date.now();
-        const response = await fetch(`${BASE}/fifa_ptd?api_key=${KEY}&_=${timestamp}`);
-        const data = await response.json();
-        partidosCache = data.fifa_ptd || [];
-        
-        // Asignar grupo a cada partido
-        partidosCache.forEach(p => {
-            let grupo = obtenerGrupoPorEquipo(p.nom_loc);
-            if (!grupo) {
-                grupo = obtenerGrupoPorEquipo(p.nom_vis);
-            }
-            p.grupoCalculado = grupo;
-            if (!p.grp_for && grupo) {
-                p.grp_for = grupo;
-            }
-        });
-        
-        const responseReales = await fetch(`${BASE}/fifa_ptd?api_key=${KEY}&filter[est]=4&_=${timestamp}`);
-        const dataReales = await responseReales.json();
-        resultadosRealesCache = {};
-        (dataReales.fifa_ptd || []).forEach(p => { 
-            resultadosRealesCache[p.id] = { 
-                gol_loc: p.t90_gol_loc, 
-                gol_vis: p.t90_gol_vis, 
-                est: p.est 
-            }; 
-        });
-        
-        return partidosCache;
-    } catch (error) { 
-        console.error('Error cargando partidos:', error); 
-        return []; 
-    }
-}
-
-async function cargarPronosticos(jugId) {
-    if (!jugId) return;
-    const locales = cargarPronosticosPartidosLocal();
-    if (locales && Object.keys(locales).length > 0) {
-        pronosticosCache = locales;
+// ========== ABRIR MODAL DE PRONÓSTICO ==========
+function abrirModalPronostico(partido) {
+    if (!currentJugador) {
+        mostrarToast('Inicia sesión para hacer tu pronóstico', 'err');
         return;
     }
-    try {
-        const response = await fetch(`${BASE_V2}/fifa_jug_pro?api_key=${KEY}&filter[id]=${jugId}&fields=jug,jug.name,id,ptd,pro_gol_loc,pro_gol_vis,pro_res`);
-        const pronosticos = (await response.json()).fifa_jug_pro || [];
-        pronosticosCache = {};
-        pronosticos.forEach(p => { pronosticosCache[p.ptd] = { s1: p.pro_gol_loc || 0, s2: p.pro_gol_vis || 0 }; });
-        guardarPronosticosPartidosLocal(pronosticosCache);
-    } catch (error) {
-        console.error('[AHORA] Error cargando pronósticos:', error);
-    }
-}
-
-function irAPartidos() {
-    if (typeof cambiarVistaCallback === 'function') {
-        cambiarVistaCallback('partidos', currentDatosCuenta);
-    }
-}
-
-function getEstadoPartido(partido) {
-    const est = Number(partido.est);
     
-    if (est === 4) {
-        return { estado: 'terminado', texto: 'FIN', icono: '🏁' };
-    }
-    if (est === 2 || est === 3) {
-        return { estado: 'envivo', texto: 'EN VIVO', icono: '🔴' };
-    }
-    return { estado: 'pendiente', texto: '', icono: '' };
-}
-
-function getResultadoReal(partidoId) { 
-    const real = resultadosRealesCache[partidoId]; 
-    return real && real.gol_loc !== null ? { gol_loc: real.gol_loc, gol_vis: real.gol_vis } : null; 
-}
-
-function obtenerPartidosDelDia() {
-    const fechaActual = obtenerFechaReal();
-    const partidosDelDia = partidosCache.filter(p => {
-        const fechaPartido = p.fch ? p.fch.split('T')[0] : '';
-        return fechaPartido === fechaActual && p.fas === 1;
-    });
+    const pronostico = pronosticosCache[partido.id] || { s1: 0, s2: 0 };
+    const ptsBase = 20;
     
-    partidosDelDia.sort((a, b) => {
-        return (a.hor || '00:00:00').localeCompare(b.hor || '00:00:00');
-    });
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:3000;display:flex;align-items:flex-end;justify-content:center;';
     
-    return partidosDelDia;
-}
-
-function renderizarPartidosDelDia() {
-    const partidosDelDia = obtenerPartidosDelDia();
-    
-    if (partidosDelDia.length === 0) {
-        return `
-            <div style="text-align: center; padding: 12px; color: #8e8e93;">
-                <div style="font-size: 16px; margin-bottom: 2px;">📅</div>
-                <div style="font-size: 11px;">No hay partidos hoy</div>
+    overlay.innerHTML = `
+        <div style="background:#fff;border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:16px;">
+                <div style="font-size:17px;font-weight:700;">Grupo ${partido.grupoCalculado || '?'}</div>
+                <button id="cerrar-modal-ahora" style="background:none;border:none;font-size:22px;">✕</button>
             </div>
-        `;
-    }
-    
-    let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
-    
-    partidosDelDia.forEach(partido => {
-        const estado = getEstadoPartido(partido);
-        const resultadoReal = getResultadoReal(partido.id);
-        
-        const fechaObj = new Date(partido.fch);
-        const diasSemana = { 0: 'Dom', 1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie', 6: 'Sáb' };
-        const meses = { 0: 'Ene', 1: 'Feb', 2: 'Mar', 3: 'Abr', 4: 'May', 5: 'Jun', 6: 'Jul', 7: 'Ago', 8: 'Sep', 9: 'Oct', 10: 'Nov', 11: 'Dic' };
-        const diaSemana = diasSemana[fechaObj.getDay()];
-        const dia = fechaObj.getDate();
-        const mes = meses[fechaObj.getMonth()];
-        const horaFormateada = partido.hor ? formatearHora12h(partido.hor) : '';
-        
-        const grupoDisplay = partido.grp_for || (partido.grupoCalculado ? `Grupo ${partido.grupoCalculado}` : 'Grupo ?');
-        
-        let centroHtml = '';
-        let borderColor = '#007aff';
-        
-        if (estado.estado === 'terminado' && resultadoReal) {
-            borderColor = '#34c759';
-            centroHtml = `
-                <div style="display: flex; align-items: center; justify-content: center; gap: 4px;">
-                    <span style="font-size: 14px; font-weight: 700; color: #1c1c1e;">${resultadoReal.gol_loc}</span>
-                    <span style="font-size: 11px; color: #8e8e93;">-</span>
-                    <span style="font-size: 14px; font-weight: 700; color: #1c1c1e;">${resultadoReal.gol_vis}</span>
-                    <span style="background: #34c75920; color: #34c759; padding: 2px 5px; border-radius: 8px; font-size: 8px; font-weight: 600;">FIN</span>
-                </div>
-            `;
-        } else if (estado.estado === 'envivo') {
-            borderColor = '#ff3b30';
-            // Mostrar marcador actual (gol_loc, gol_vis)
-            const golLocal = partido.gol_loc || 0;
-            const golVisita = partido.gol_vis || 0;
-            centroHtml = `
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                    <div style="font-size: 16px; font-weight: 700; color: #ff3b30;">${golLocal} - ${golVisita}</div>
-                    <div style="display: flex; align-items: center; justify-content: center; gap: 3px; margin-top: 2px;">
-                        <span style="color: #ff3b30; font-size: 9px;">🔴</span>
-                        <span style="color: #ff3b30; font-size: 9px; font-weight: 600;">EN VIVO</span>
-                    </div>
-                </div>
-            `;
-        } else {
-            borderColor = '#007aff';
-            centroHtml = `
-                <div style="display: flex; align-items: center; justify-content: center;">
-                    <span style="font-size: 12px; font-weight: 700; color: #007aff;">VS</span>
-                </div>
-            `;
-        }
-        
-        html += `
-            <div style="background: #f9f9fb; border-radius: 12px; padding: 8px 10px; border-left: 3px solid ${borderColor}; cursor: pointer;" data-id="${partido.id}">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                    <span style="font-size: 9px; font-weight: 600; color: #8e8e93;">${grupoDisplay}</span>
-                    <span style="font-size: 9px; color: #8e8e93;">${diaSemana} ${dia} ${mes} · ${horaFormateada}</span>
-                </div>
-                
-                <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
-                    <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; min-width: 0;">
-                        <span style="font-size: 28px;">${getBandera(partido.nom_loc)}</span>
-                        <span style="font-size: 10px; font-weight: 500; color: #1c1c1e; text-align: center; word-break: break-word; max-width: 80px; line-height: 1.2;">${partido.nom_loc}</span>
-                    </div>
-                    
-                    <div style="flex-shrink: 0; min-width: 70px; text-align: center;">
-                        ${centroHtml}
-                    </div>
-                    
-                    <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; min-width: 0;">
-                        <span style="font-size: 28px;">${getBandera(partido.nom_vis)}</span>
-                        <span style="font-size: 10px; font-weight: 500; color: #1c1c1e; text-align: center; word-break: break-word; max-width: 80px; line-height: 1.2;">${partido.nom_vis}</span>
-                    </div>
-                </div>
-            </div>
-        `;
-    });
-    
-    html += '</div>';
-    return html;
-}
-
-async function renderizarAhoraContent() {
-    await cargarPartidos();
-    
-    const partidosDelDiaHtml = renderizarPartidosDelDia();
-    
-    const html = `
-        <div style="width:100%; height:100%; background: #ffffff; border-radius: 20px; overflow-y: auto; overflow-x: hidden;">
-            <style>
-                .ahora-header { 
-                    background: linear-gradient(135deg, #0a2f1f 0%, #1a5a3a 100%);
-                    padding: 16px 20px; 
-                    text-align: center; 
-                    color: white;
-                    border-radius: 20px 20px 0 0;
-                }
-                .ahora-header h2 { 
-                    font-size: 18px; 
-                    font-weight: 700; 
-                    margin: 0 0 4px 0; 
-                }
-                .ahora-header p { 
-                    font-size: 12px; 
-                    opacity: 0.95; 
-                    margin: 0;
-                }
-                .ahora-cards { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
-                .ahora-card { 
-                    background: #f9f9fb; 
-                    border: 1px solid #e5e5ea; 
-                    border-radius: 16px; 
-                    padding: 14px 16px; 
-                    cursor: pointer; 
-                }
-                .ahora-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-                .ahora-card:active { transform: scale(0.98); }
-                .ahora-card-header {
-                    display: flex;
-                    align-items: center;
-                    gap: 12px;
-                    margin-bottom: 12px;
-                }
-                .ahora-card-icono { 
-                    font-size: 24px; 
-                    width: 40px;
-                    height: 40px;
-                    background: rgba(0,122,255,0.1);
-                    border-radius: 20px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                }
-                .ahora-card-titulo { 
-                    font-size: 14px; 
-                    font-weight: 700; 
-                    color: #1c1c1e; 
-                    flex: 1;
-                }
-                .ahora-card-flecha { 
-                    font-size: 14px; 
-                    color: #c7c7cc; 
-                }
-                .ahora-card-contenido {
-                    padding-left: 52px;
-                }
-                .ahora-footer { 
-                    padding: 12px 16px; 
-                    text-align: center; 
-                    border-top: 1px solid #e5e5ea; 
-                    margin-top: 4px; 
-                }
-                .ahora-footer-text { 
-                    font-size: 10px; 
-                    color: #8e8e93; 
-                }
-            </style>
-            
-            <div class="ahora-header">
-                <h2>🏆 La Polla Mundialista 2026</h2>
-                <p>¡Bienvenido, ${currentDatosCuenta?.name || currentDatosCuenta?.nombre || 'Participante'}!</p>
+            <div style="font-size:12px;color:#8e8e93;margin-bottom:20px;text-align:center;">
+                ${new Date(partido.fch).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} · ${formatearHora12h(partido.hor)}
             </div>
             
-            <div class="ahora-cards">
-                <!-- CARD 1: PARTIDOS DEL DÍA -->
-                <div class="ahora-card" data-accion="partidos">
-                    <div class="ahora-card-header">
-                        <div class="ahora-card-icono">⚽</div>
-                        <div class="ahora-card-titulo">Partidos de hoy</div>
-                        <div class="ahora-card-flecha">→</div>
+            <div style="background: linear-gradient(135deg, #0a2f1f 0%, #1a5a3a 100%); border-radius: 20px; padding: 16px; margin-bottom: 20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="text-align:center; flex:1;">
+                        <div style="font-size:56px; margin-bottom:8px;">${getBandera(partido.nom_loc)}</div>
+                        <div style="font-size:15px; font-weight:700; color:white;">${partido.nom_loc}</div>
                     </div>
-                    <div class="ahora-card-contenido">
-                        ${partidosDelDiaHtml}
+                    <div style="font-size:18px; font-weight:700; color:white; padding:0 20px;">VS</div>
+                    <div style="text-align:center; flex:1;">
+                        <div style="font-size:56px; margin-bottom:8px;">${getBandera(partido.nom_vis)}</div>
+                        <div style="font-size:15px; font-weight:700; color:white;">${partido.nom_vis}</div>
                     </div>
                 </div>
             </div>
             
-            <div class="ahora-footer">
-                <div class="ahora-footer-text">💡 Haz clic en cualquier partido para hacer tu pronóstico</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:24px;">
+                <div style="flex:1; text-align:center;">
+                    <div style="display:flex; align-items:center; justify-content:center; gap:8px; background:#f9f9fb; border-radius:30px; padding:6px 10px;">
+                        <button id="modal-dec-loc" style="width:36px;height:36px;border-radius:18px;background:#fff;border:1px solid #e5e5ea;font-size:18px;font-weight:700;cursor:pointer;">−</button>
+                        <input id="modal-s1" type="text" inputmode="numeric" pattern="[0-9]*" value="${pronostico.s1}" style="width:44px;height:36px;text-align:center;font-size:17px;font-weight:700;border:1px solid #e5e5ea;border-radius:10px;">
+                        <button id="modal-inc-loc" style="width:36px;height:36px;border-radius:18px;background:#fff;border:1px solid #e5e5ea;font-size:18px;font-weight:700;cursor:pointer;">+</button>
+                    </div>
+                </div>
+                <div style="flex:1; text-align:center;">
+                    <div style="display:flex; align-items:center; justify-content:center; gap:8px; background:#f9f9fb; border-radius:30px; padding:6px 10px;">
+                        <button id="modal-dec-vis" style="width:36px;height:36px;border-radius:18px;background:#fff;border:1px solid #e5e5ea;font-size:18px;font-weight:700;cursor:pointer;">−</button>
+                        <input id="modal-s2" type="text" inputmode="numeric" pattern="[0-9]*" value="${pronostico.s2}" style="width:44px;height:36px;text-align:center;font-size:17px;font-weight:700;border:1px solid #e5e5ea;border-radius:10px;">
+                        <button id="modal-inc-vis" style="width:36px;height:36px;border-radius:18px;background:#fff;border:1px solid #e5e5ea;font-size:18px;font-weight:700;cursor:pointer;">+</button>
+                    </div>
+                </div>
             </div>
+            
+            <div style="background:#f2f2f7;border-radius:12px;padding:12px;margin-bottom:16px;">
+                <div style="font-size:14px;font-weight:700;margin-bottom:12px;">📋 Detalle de puntos</div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>🏆 Ganador / Empate</span><span style="color:#34c759;">${Math.round(ptsBase * 0.4)} pts</span></div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>⚽ Gol local exacto</span><span style="color:#34c759;">${Math.round(ptsBase * 0.2)} pts</span></div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>⚽ Gol visita exacto</span><span style="color:#34c759;">${Math.round(ptsBase * 0.2)} pts</span></div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>📊 Diferencia de goles</span><span style="color:#34c759;">${Math.round(ptsBase * 0.2)} pts</span></div>
+                <div style="height:1px;background:#e5e5ea;margin:8px 0;"></div>
+                <div style="display:flex;justify-content:space-between;"><span style="font-weight:700;">⭐ BASE</span><span style="color:#ff9500;font-weight:800;">${ptsBase} pts</span></div>
+            </div>
+            
+            <div style="background:#eafaf1;border-radius:12px;padding:12px;margin-bottom:16px;text-align:center;">
+                <span style="color:#1e8449;font-size:13px;font-weight:600;">🟢 PULSO 100 · Si aciertas el marcador exacto tendrás ${ptsBase} puntos.</span>
+            </div>
+            
+            <button id="modal-guardar-ahora" style="width:100%;background:#34c759;color:#fff;border:none;border-radius:14px;padding:14px;font-weight:700;cursor:pointer;">💾 Guardar pronóstico</button>
         </div>
     `;
     
-    return html;
+    document.body.appendChild(overlay);
+    
+    document.getElementById('cerrar-modal-ahora')?.addEventListener('click', () => overlay.remove());
+    
+    const s1Input = document.getElementById('modal-s1');
+    const s2Input = document.getElementById('modal-s2');
+    
+    function validarInput(input) {
+        input.addEventListener('input', (e) => {
+            let valor = e.target.value.replace(/[^0-9]/g, '');
+            if (valor === '') valor = '0';
+            let num = parseInt(valor);
+            if (num > 20) num = 20;
+            e.target.value = num;
+        });
+    }
+    validarInput(s1Input);
+    validarInput(s2Input);
+    
+    document.getElementById('modal-inc-loc')?.addEventListener('click', () => {
+        s1Input.value = Math.min(20, parseInt(s1Input.value || 0) + 1);
+    });
+    document.getElementById('modal-dec-loc')?.addEventListener('click', () => {
+        s1Input.value = Math.max(0, parseInt(s1Input.value || 0) - 1);
+    });
+    document.getElementById('modal-inc-vis')?.addEventListener('click', () => {
+        s2Input.value = Math.min(20, parseInt(s2Input.value || 0) + 1);
+    });
+    document.getElementById('modal-dec-vis')?.addEventListener('click', () => {
+        s2Input.value = Math.max(0, parseInt(s2Input.value || 0) - 1);
+    });
+    
+    document.getElementById('modal-guardar-ahora')?.addEventListener('click', async () => {
+        const s1 = parseInt(s1Input?.value) || 0;
+        const s2 = parseInt(s2Input?.value) || 0;
+        overlay.remove();
+        await guardarPronosticoAhora(partido.id, s1, s2);
+    });
+    
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) overlay.remove();
+    });
 }
 
-export async function renderizarAhora(contenedor, datosCuenta) {
+// ========== GUARDAR PRONÓSTICO ==========
+const BASE_V2 = 'https://server.sion.hysintegrar.com/fifa2026/vERP_2_dat_dat/v2';
+const KEY = 'SuzvTp4qwXQtAVFJbdzP';
+
+async function guardarPronosticoAhora(ptdId, s1, s2) {
+    if (!currentJugador) {
+        mostrarToast('Inicia sesión primero', 'err');
+        return;
+    }
+    
+    mostrarToast('💾 Guardando...', 'info');
+    
+    try {
+        const response = await fetch(`${BASE_V2}/_process/API_PUT_PAR?api_key=${KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({
+                jug: currentJugador.id,
+                id: ptdId,
+                pro_gol_loc: s1,
+                pro_gol_vis: s2,
+                pro_res: s1 > s2 ? '1' : s2 > s1 ? '2' : 'X'
+            })
+        });
+        
+        if (response.ok) {
+            pronosticosCache[ptdId] = { s1, s2 };
+            mostrarToast('✅ Pronóstico guardado', 'ok');
+            
+            const card = document.querySelector(`.ahora-card[data-id="${ptdId}"]`);
+            if (card) {
+                const pronoDiv = card.querySelector('.ahora-pronostico');
+                if (pronoDiv) {
+                    pronoDiv.innerHTML = `<span style="font-size:12px;color:#007aff;">⚽ Tu pronóstico: ${s1} - ${s2}</span>`;
+                }
+            }
+            
+            if (ptdId === 1 && globalCambiarVistaCallback) {
+                setTimeout(() => {
+                    globalCambiarVistaCallback('partidos', currentJugador);
+                }, 1500);
+            }
+        } else {
+            mostrarToast('❌ Error al guardar', 'err');
+        }
+    } catch (error) {
+        console.error('Error al guardar:', error);
+        mostrarToast('❌ Error de conexión', 'err');
+    }
+}
+
+// ========== RENDERIZAR PRINCIPAL ==========
+async function renderizarAhora(contenedor, datosCuenta) {
     if (!contenedor) return;
-    currentContenedor = contenedor;
-    currentDatosCuenta = datosCuenta;
     
-    await cargarPronosticos(datosCuenta.id);
+    currentJugador = datosCuenta;
+    detenerCountdownAhora();
     
-    if (actualizacionPeriodicaInterval) {
-        clearInterval(actualizacionPeriodicaInterval);
-        actualizacionPeriodicaInterval = null;
+    if (currentJugador) {
+        try {
+            const response = await fetch(`${BASE_V2}/fifa_jug_pro?api_key=${KEY}&filter[id]=${currentJugador.id}`);
+            const data = await response.json();
+            pronosticosCache = {};
+            (data.fifa_jug_pro || []).forEach(p => {
+                pronosticosCache[p.ptd] = { s1: p.pro_gol_loc || 0, s2: p.pro_gol_vis || 0 };
+            });
+        } catch (error) {
+            console.error('Error cargando pronósticos:', error);
+        }
+    }
+    
+    let partidos = await cargarPartidos();
+    partidos = corregirFechasSegunVelneo(partidos);
+    const partidosHoy = obtenerPartidosDeHoy(partidos);
+    
+    if (partidosHoy.length === 0) {
+        contenedor.innerHTML = `
+            <div style="padding:20px;text-align:center;color:#8e8e93;">
+                ⚽ No hay partidos programados para hoy
+            </div>
+        `;
+        return;
     }
     
     contenedor.innerHTML = `
-        <div style="display: flex; justify-content: center; align-items: center; height: 100%; min-height: 300px;">
-            <div style="text-align: center;">
-                <div style="width: 40px; height: 40px; border: 3px solid rgba(0,0,0,0.1); border-top-color: #007aff; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto;"></div>
-                <p style="color: #8e8e93; margin-top: 16px;">Cargando...</p>
+        <div style="padding:16px;">
+            <h2 style="font-size:18px;margin-bottom:16px;">⚽ Partidos de hoy</h2>
+            <div id="ahora-partidos-lista">
+                ${partidosHoy.map(p => {
+                    const countdown = calcularCountdown(p.fch.split('T')[0], p.hor);
+                    const pronostico = pronosticosCache[p.id];
+                    const pronosticoHTML = pronostico 
+                        ? `<div class="ahora-pronostico" style="margin-top:12px;text-align:center;padding-top:8px;border-top:1px solid #e5e5ea;">
+                            <span style="font-size:12px;color:#007aff;">⚽ Tu pronóstico: ${pronostico.s1} - ${pronostico.s2}</span>
+                           </div>`
+                        : `<div class="ahora-pronostico" style="margin-top:12px;text-align:center;padding-top:8px;border-top:1px solid #e5e5ea;">
+                            <span style="font-size:11px;color:#8e8e93;">⚽ Haz clic para pronosticar</span>
+                           </div>`;
+                    
+                    return `
+                        <div class="ahora-card" data-id="${p.id}" style="background:#fff;border-radius:14px;padding:16px;margin-bottom:12px;border:1.5px solid #007aff;cursor:pointer;">
+                            <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+                                <span style="font-size:12px;color:#8e8e93;">Grupo ${p.grupoCalculado || '?'}</span>
+                                <span style="font-size:12px;color:#8e8e93;">${formatearHora12h(p.hor)}</span>
+                            </div>
+                            <div style="display:flex;align-items:center;justify-content:space-between;">
+                                <div style="text-align:center;flex:1;">
+                                    <div style="font-size:40px;">${getBandera(p.nom_loc)}</div>
+                                    <div style="font-weight:600;font-size:13px;">${p.nom_loc}</div>
+                                </div>
+                                <div style="text-align:center;min-width:60px;">
+                                    <div style="font-size:18px;font-weight:700;color:#007aff;">VS</div>
+                                </div>
+                                <div style="text-align:center;flex:1;">
+                                    <div style="font-size:40px;">${getBandera(p.nom_vis)}</div>
+                                    <div style="font-weight:600;font-size:13px;">${p.nom_vis}</div>
+                                </div>
+                            </div>
+                            <div style="margin-top:12px;text-align:center;">
+                                <span class="ahora-countdown" data-fch="${p.fch.split('T')[0]}" data-hor="${p.hor}" style="font-size:14px;font-weight:600;color:${countdown.negativo ? '#ff3b30' : '#ff9500'};">${countdown.texto}</span>
+                            </div>
+                            ${pronosticoHTML}
+                        </div>
+                    `;
+                }).join('')}
             </div>
+            <p style="font-size:11px;color:#8e8e93;text-align:center;margin-top:16px;">
+                💡 Haz clic en cualquier partido para hacer tu pronóstico
+            </p>
         </div>
-        <style>
-            @keyframes spin {
-                to { transform: rotate(360deg); }
-            }
-        </style>
     `;
     
-    const html = await renderizarAhoraContent();
-    contenedor.innerHTML = html;
-    
-    const cardPartidos = contenedor.querySelector('.ahora-card[data-accion="partidos"]');
-    if (cardPartidos) cardPartidos.addEventListener('click', () => irAPartidos());
-    
-    actualizacionPeriodicaInterval = setInterval(async () => {
-        await cargarPronosticos(datosCuenta.id);
-        await cargarPartidos();
-        const nuevoHtml = await renderizarAhoraContent();
-        if (currentContenedor) {
-            currentContenedor.innerHTML = nuevoHtml;
-            const newCardPartidos = currentContenedor.querySelector('.ahora-card[data-accion="partidos"]');
-            if (newCardPartidos) newCardPartidos.addEventListener('click', () => irAPartidos());
-        }
-    }, 60000);
-}
-
-export function suscribirAhoraAlSimulador() {
-    onSimuladorCambio(() => {
-        if (currentContenedor && currentDatosCuenta) {
-            renderizarAhora(currentContenedor, currentDatosCuenta);
+    document.querySelectorAll('.ahora-card').forEach(card => {
+        const id = parseInt(card.dataset.id);
+        const partido = partidosHoy.find(p => p.id === id);
+        if (partido) {
+            card.onclick = () => abrirModalPronostico(partido);
         }
     });
+    
+    if (document.querySelectorAll('.ahora-countdown').length > 0) {
+        iniciarCountdownAhora();
+    }
+    
+    const visibilityHandler = () => {
+        if (document.hidden) {
+            detenerCountdownAhora();
+        } else {
+            if (document.querySelectorAll('.ahora-countdown').length > 0) {
+                iniciarCountdownAhora();
+                actualizarCountdownsEnCards();
+            }
+        }
+    };
+    
+    document.removeEventListener('visibilitychange', visibilityHandler);
+    document.addEventListener('visibilitychange', visibilityHandler);
 }
+
+// ========== EXPORTACIONES (SOLO AQUÍ, UNA VEZ) ==========
+export { 
+    setCambiarVistaCallback, 
+    suscribirAhoraAlSimulador, 
+    refrescarAhora, 
+    renderizarAhora 
+};
