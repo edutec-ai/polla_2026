@@ -1,24 +1,16 @@
 // funciones/partidos.js
 // Módulo de Partidos - La Polla Mundialista 2026
-// VERSIÓN DEFINITIVA - CON FEEDBACK INMEDIATO Y CORRECCIÓN DE GUARDADO
-// - Tabs: TODOS, GRUPOS, COLOMBIA
-// - Tab TODOS muestra SOLO fase de grupos (72 partidos)
-// - Control por `est` (Velneo): 1=Antes del partido, 2/3=EN VIVO, 4=TERMINADO
-// - Countdown con hora REAL del dispositivo
-// - Mapeo hardcodeado de grupos (48 equipos)
-// - Scroll inteligente solo en pestaña TODOS
-// - Botón K con bandera 🇨🇴
-// - Modal con fondo de estadio CSS puro (sin imágenes)
-// - CORREGIDO: Inputs tipo text con inputmode numeric para Android
-// - CORREGIDO: Gap reducido entre botones y inputs
-// - CORREGIDO: Feedback inmediato al guardar (muestra el marcador temporal)
-// - CORREGIDO: El modal se cierra ANTES de guardar para mostrar feedback en la card
-// - CORREGIDO: El cache se actualiza inmediatamente después del POST exitoso
+// VERSIÓN COMPLETA CON:
+// - Badges simplificados: EN VIVO y TERMINADO
+// - Marcadores EN VIVO con actualización cada 60 segundos
+// - Tabla de posiciones con puntos correctos (usa gol_loc/gol_vis para EN VIVO)
+// - Feedback inmediato al guardar
+// - Sincronización en segundo plano
 
 import { onSimuladorCambio, simGetFechaStr, simGetHoraStr } from './lab.js';
 import { gruposSeleccion } from './especiales.js';
 import { getBandera } from './banderas.js';
-import { cargarPronosticosPartidosLocal, guardarPronosticosPartidosLocal } from './sync.js';
+import { cargarPronosticosPartidosLocal, guardarPronosticosPartidosLocal, cargarPronosticosEspecialesLocal } from './sync.js';
 
 const BASE = 'https://server.sion.hysintegrar.com/fifa2026/vERP_2_dat_dat/v1';
 const BASE_V2 = 'https://server.sion.hysintegrar.com/fifa2026/vERP_2_dat_dat/v2';
@@ -53,6 +45,7 @@ let countdownInterval = null;
 let countdownActivo = false;
 let syncIntervals = new Map();
 let tempPronosticos = new Map();
+let enVivoInterval = null;
 let globalCambiarVistaCallback = null;
 
 function mostrarToast(msg, tipo) {
@@ -136,7 +129,11 @@ async function cargarPartidos() {
         const dataReales = await responseReales.json();
         resultadosRealesCache = {};
         (dataReales.fifa_ptd || []).forEach(p => { 
-            resultadosRealesCache[p.id] = { gol_loc: p.t90_gol_loc, gol_vis: p.t90_gol_vis, est: p.est }; 
+            resultadosRealesCache[p.id] = { 
+                gol_loc: p.t90_gol_loc, 
+                gol_vis: p.t90_gol_vis, 
+                est: p.est 
+            }; 
         });
         
         return partidosCache;
@@ -198,10 +195,17 @@ function getEstadoPartidoPorEst(partido) {
     };
 }
 
+// ========== MARCADOR EN VIVO MEJORADO ==========
 function getMarcadorEnVivo(partido) {
     const est = Number(partido.est);
     if (est === 2 || est === 3) {
-        return { tieneMarcador: false, texto: '🔴 EN VIVO' };
+        // Devolver el marcador actual (gol_loc, gol_vis) si existe
+        return { 
+            tieneMarcador: true, 
+            texto: 'EN VIVO',
+            gol_loc: partido.gol_loc || 0,
+            gol_vis: partido.gol_vis || 0
+        };
     }
     return null;
 }
@@ -339,70 +343,112 @@ function getResultadoReal(partidoId) {
     return real && real.gol_loc !== null ? { gol_loc: real.gol_loc, gol_vis: real.gol_vis } : null; 
 }
 
+// ========== TABLA DE POSICIONES CORREGIDA ==========
 function renderTablaPosiciones(grupo) {
     const equiposGrupo = equiposCache.filter(e => obtenerGrupoPorEquipo(e.name) === grupo);
-    equiposGrupo.sort((a,b) => (b.pts||0)-(a.pts||0) || (b.dif||0)-(a.dif||0) || (b.gf||0)-(a.gf||0));
     const clasificados = gruposSeleccion[grupo] || {};
     
     if (!equiposGrupo.length) {
         return '<div style="padding:20px;text-align:center;color:#8e8e93;">Sin datos del grupo ' + grupo + '</div>';
     }
     
-    const partidosGrupo = partidosCache.filter(p => p.grupoCalculado === grupo && Number(p.est) !== 0);
+    // Filtrar partidos del grupo que NO están pendientes (est !== 0 y est !== 1)
+    const partidosGrupo = partidosCache.filter(p => 
+        p.grupoCalculado === grupo && 
+        Number(p.est) !== 0 && 
+        Number(p.est) !== 1
+    );
     
     equiposGrupo.forEach(eq => {
-        if (!eq.pj || eq.pj === 0) {
-            const partidosEquipo = partidosGrupo.filter(p => p.nom_loc === eq.name || p.nom_vis === eq.name);
-            eq.pj = partidosEquipo.length;
-            eq.pg = 0; eq.pe = 0; eq.pp = 0; eq.gf = 0; eq.gc = 0;
+        eq.pj = 0;
+        eq.pg = 0;
+        eq.pe = 0;
+        eq.pp = 0;
+        eq.gf = 0;
+        eq.gc = 0;
+        
+        partidosGrupo.forEach(p => {
+            const esLocal = p.nom_loc === eq.name;
+            const esVisitante = p.nom_vis === eq.name;
             
-            partidosEquipo.forEach(p => {
-                const resultado = getResultadoReal(p.id);
-                if (resultado && Number(p.est) === 4) {
-                    const esLocal = p.nom_loc === eq.name;
-                    const golesFavor = esLocal ? resultado.gol_loc : resultado.gol_vis;
-                    const golesContra = esLocal ? resultado.gol_vis : resultado.gol_loc;
+            if (esLocal || esVisitante) {
+                eq.pj++;
+                
+                let golesFavor, golesContra;
+                const est = Number(p.est);
+                
+                if (est === 4) {
+                    // Partido terminado: usar resultado final (t90)
+                    const resultado = getResultadoReal(p.id);
+                    if (resultado) {
+                        golesFavor = esLocal ? resultado.gol_loc : resultado.gol_vis;
+                        golesContra = esLocal ? resultado.gol_vis : resultado.gol_loc;
+                    }
+                } else if (est === 2 || est === 3) {
+                    // Partido EN VIVO: usar marcador actual (gol_loc, gol_vis)
+                    golesFavor = esLocal ? (p.gol_loc || 0) : (p.gol_vis || 0);
+                    golesContra = esLocal ? (p.gol_vis || 0) : (p.gol_loc || 0);
+                }
+                
+                if (golesFavor !== undefined) {
                     eq.gf += golesFavor;
                     eq.gc += golesContra;
-                    if (golesFavor > golesContra) eq.pg++;
-                    else if (golesFavor === golesContra) eq.pe++;
-                    else eq.pp++;
+                    
+                    if (golesFavor > golesContra) {
+                        eq.pg++;
+                    } else if (golesFavor === golesContra) {
+                        eq.pe++;
+                    } else {
+                        eq.pp++;
+                    }
                 }
-            });
-            eq.dif = eq.gf - eq.gc;
-            eq.pts = (eq.pg * 3) + eq.pe;
-        }
+            }
+        });
+        
+        eq.dif = eq.gf - eq.gc;
+        eq.pts = (eq.pg * 3) + eq.pe;
     });
     
-    equiposGrupo.sort((a,b) => (b.pts||0)-(a.pts||0) || (b.dif||0)-(a.dif||0) || (b.gf||0)-(a.gf||0));
+    // Ordenar: puntos, diferencia de goles, goles a favor
+    equiposGrupo.sort((a, b) => {
+        if (a.pts !== b.pts) return b.pts - a.pts;
+        if (a.dif !== b.dif) return b.dif - a.dif;
+        return b.gf - a.gf;
+    });
     
-    return `<div style="overflow-x:auto;">
+    let html = `<div style="overflow-x:auto;">
         <table style="width:100%;border-collapse:collapse;font-size:12px;">
             <thead><tr style="background:#f2f2f7;">
                 <th>Pos</th><th>Equipo</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>GF</th><th>GC</th><th>DG</th><th>PTS</th>
             </tr></thead>
-            <tbody>${
-                equiposGrupo.map((eq, idx) => {
-                    const esClasificado1 = eq.name === clasificados[1];
-                    const esClasificado2 = eq.name === clasificados[2];
-                    let badgeClasificacion = '';
-                    if (esClasificado1) badgeClasificacion = ' 🏆[1]';
-                    else if (esClasificado2) badgeClasificacion = ' ✅[2]';
-                    
-                    return `<tr style="background:${idx % 2 === 0 ? '#fff' : '#f9f9f9'}">
-                        <td style="color:${idx<2?'#34c759':'#1c1c1e'}">${idx+1}</td>
-                        <td style="text-align:left;"><span style="font-size:18px;margin-right:6px;">${getBandera(eq.name)}</span>${eq.name}${badgeClasificacion}</td>
-                        <td>${eq.pj||0}</td><td style="color:${eq.pg>0?'#34c759':'#1c1c1e'}">${eq.pg||0}</td>
-                        <td style="color:${eq.pe>0?'#ff9500':'#1c1c1e'}">${eq.pe||0}</td>
-                        <td style="color:${eq.pp>0?'#ff3b30':'#1c1c1e'}">${eq.pp||0}</td>
-                        <td>${eq.gf||0}</td><td>${eq.gc||0}</td>
-                        <td style="color:${(eq.dif||0)>0?'#34c759':(eq.dif||0)<0?'#ff3b30':'#1c1c1e'}">${(eq.dif||0)>0?'+'+eq.dif:eq.dif||0}</td>
-                        <td style="font-weight:700;color:#007aff;">${eq.pts||0}</td>
-                    </tr>`;
-                }).join('')
-            }</tbody>
+            <tbody>`;
+    
+    equiposGrupo.forEach((eq, idx) => {
+        const esClasificado1 = eq.name === clasificados[1];
+        const esClasificado2 = eq.name === clasificados[2];
+        let badgeClasificacion = '';
+        if (esClasificado1) badgeClasificacion = ' 🏆[1]';
+        else if (esClasificado2) badgeClasificacion = ' ✅[2]';
+        
+        html += `<tr style="background:${idx % 2 === 0 ? '#fff' : '#f9f9f9'}">
+            <td style="color:${idx < 2 ? '#34c759' : '#1c1c1e'}">${idx + 1}</td>
+            <td style="text-align:left;"><span style="font-size:18px;margin-right:6px;">${getBandera(eq.name)}</span>${eq.name}${badgeClasificacion}</td>
+            <td>${eq.pj || 0}</td>
+            <td style="color:${eq.pg > 0 ? '#34c759' : '#1c1c1e'}">${eq.pg || 0}</td>
+            <td style="color:${eq.pe > 0 ? '#ff9500' : '#1c1c1e'}">${eq.pe || 0}</td>
+            <td style="color:${eq.pp > 0 ? '#ff3b30' : '#1c1c1e'}">${eq.pp || 0}</td>
+            <td>${eq.gf || 0}</td>
+            <td>${eq.gc || 0}</td>
+            <td style="color:${(eq.dif || 0) > 0 ? '#34c759' : (eq.dif || 0) < 0 ? '#ff3b30' : '#1c1c1e'}">${(eq.dif || 0) > 0 ? '+' + eq.dif : eq.dif || 0}</td>
+            <td style="font-weight:700;color:#007aff;">${eq.pts || 0}</td>
+         </tr>`;
+    });
+    
+    html += `</tbody>
         </table>
     </div>`;
+    
+    return html;
 }
 
 function calcularCountdown(fechaPartido, horaPartido, fechaActual, horaActual) {
@@ -457,14 +503,27 @@ function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimerDia = 
     const cardStyle = `${estilo.bg}; border-radius:14px; padding:14px; margin-bottom:10px; border: ${estilo.borderWidth} solid ${estilo.border}; cursor:pointer;`;
     
     let centroHTML = '';
+    let centroExtraClass = '';
+    
     if (resultadoReal && estadoEst.estado === 'terminado') {
         centroHTML = `<div style="font-size:20px; font-weight:700; color:#000;">${resultadoReal.gol_loc} - ${resultadoReal.gol_vis}</div>`;
     } else if (estadoEst.estado === 'envivo' && marcadorEnVivo) {
-        centroHTML = `<div style="font-size:14px; font-weight:700; color:#ff3b30;">${marcadorEnVivo.texto}</div>`;
+        if (marcadorEnVivo.tieneMarcador && (marcadorEnVivo.gol_loc !== undefined || marcadorEnVivo.gol_vis !== undefined)) {
+            centroHTML = `
+                <div style="font-size:20px; font-weight:700; color:#ff3b30;">${marcadorEnVivo.gol_loc} - ${marcadorEnVivo.gol_vis}</div>
+                <div style="font-size:10px; color:#ff9500; margin-top:4px;">🔴 ${marcadorEnVivo.texto}</div>
+            `;
+            centroExtraClass = 'centro-marcador-envivo';
+        } else {
+            centroHTML = `<div style="font-size:14px; font-weight:700; color:#ff3b30;">🔴 ${marcadorEnVivo.texto}</div>`;
+            centroExtraClass = 'centro-marcador-envivo';
+        }
     } else if (estadoEst.estado === 'pendiente') {
         centroHTML = '<div style="font-size:14px; font-weight:700; color:#007aff;">VS</div>';
+        centroExtraClass = 'centro-marcador-pendiente';
     } else {
         centroHTML = '<div style="font-size:14px; font-weight:700; color:#8e8e93;">- - -</div>';
+        centroExtraClass = 'centro-marcador-other';
     }
     
     let countdownHTML = '';
@@ -549,7 +608,7 @@ function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimerDia = 
                 <div style="font-size:28px;">${getBandera(partido.nom_loc)}</div>
                 <div style="font-size:13px; font-weight:600; color:#000;">${partido.nom_loc}</div>
             </div>
-            <div style="text-align:center; min-width:60px;">
+            <div class="${centroExtraClass}" style="text-align:center; min-width:60px;">
                 ${centroHTML}
             </div>
             <div style="text-align:center; flex:1;">
@@ -589,6 +648,50 @@ function iniciarCountdown() {
 function detenerCountdown() {
     if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
     countdownActivo = false;
+}
+
+// ========== ACTUALIZACIÓN DE MARCADORES EN VIVO ==========
+async function actualizarMarcadoresEnVivo() {
+    const cardsEnVivo = document.querySelectorAll('.partido-card[data-est="2"], .partido-card[data-est="3"]');
+    if (cardsEnVivo.length === 0) return;
+    
+    try {
+        const timestamp = Date.now();
+        const response = await fetch(`${BASE}/fifa_ptd?api_key=${KEY}&filter[est]=2,3&_=${timestamp}`);
+        const data = await response.json();
+        const partidosEnVivo = data.fifa_ptd || [];
+        
+        partidosEnVivo.forEach(partido => {
+            const card = document.querySelector(`.partido-card[data-id="${partido.id}"]`);
+            if (card) {
+                const centroDiv = card.querySelector('.centro-marcador-envivo');
+                if (centroDiv) {
+                    centroDiv.innerHTML = `
+                        <div style="font-size:20px; font-weight:700; color:#ff3b30;">${partido.gol_loc || 0} - ${partido.gol_vis || 0}</div>
+                        <div style="font-size:10px; color:#ff9500; margin-top:4px;">🔴 EN VIVO</div>
+                    `;
+                }
+            }
+        });
+    } catch (error) {
+        console.error('[EnVivo] Error actualizando marcadores:', error);
+    }
+}
+
+function iniciarActualizacionEnVivo() {
+    if (enVivoInterval) clearInterval(enVivoInterval);
+    enVivoInterval = setInterval(() => {
+        if (!document.hidden) {
+            actualizarMarcadoresEnVivo();
+        }
+    }, 60000);
+}
+
+function detenerActualizacionEnVivo() {
+    if (enVivoInterval) {
+        clearInterval(enVivoInterval);
+        enVivoInterval = null;
+    }
 }
 
 function obtenerPrimerDiaConPartidos(partidos) {
@@ -631,31 +734,34 @@ async function guardarPronostico(ptdId, s1, s2) {
         return; 
     }
     
-    // Mostrar feedback inmediato en la card
     iniciarSincronizacionPeriodica(ptdId, s1, s2);
     actualizarCardPartido(ptdId, s1, s2);
     mostrarToast('💾 Guardando...', 'info');
     
     try {
         const response = await fetch(`${BASE_V2}/_process/API_PUT_PAR?api_key=${KEY}`, {
-            method: 'POST', headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ jug: currentJugador.id, id: ptdId, pro_gol_loc: s1, pro_gol_vis: s2, pro_res: s1 > s2 ? '1' : s2 > s1 ? '2' : 'X' })
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ 
+                jug: currentJugador.id, 
+                id: ptdId, 
+                pro_gol_loc: s1, 
+                pro_gol_vis: s2, 
+                pro_res: s1 > s2 ? '1' : s2 > s1 ? '2' : 'X' 
+            })
         });
         
         if (response.ok) { 
-            // ✅ Actualizar cache inmediatamente
             pronosticosCache[ptdId] = { s1, s2 };
             actualizarLocalStorage();
             mostrarToast('✅ Pronóstico guardado', 'ok');
             
-            // ✅ Limpiar temporal y timeout
             tempPronosticos.delete(ptdId);
             if (syncIntervals.has(ptdId)) {
                 clearTimeout(syncIntervals.get(ptdId));
                 syncIntervals.delete(ptdId);
             }
             
-            // Volver a AHORA si es el partido inaugural
             if (ptdId === 1 && globalCambiarVistaCallback) {
                 setTimeout(() => { 
                     globalCambiarVistaCallback('ahora', currentJugador); 
@@ -845,13 +951,11 @@ function abrirModal(partido, fechaSim, horaSim) {
     validarInputNumerico(s1Input);
     validarInputNumerico(s2Input);
     
-    // ========== BOTÓN GUARDAR CORREGIDO ==========
-    // Cierra el modal ANTES de guardar para que el feedback se vea en la card
     if (guardarBtn) {
         guardarBtn.onclick = () => { 
             const s1 = parseInt(s1Input?.value) || 0; 
             const s2 = parseInt(s2Input?.value) || 0; 
-            overlay.remove();  // ← Cerrar modal primero
+            overlay.remove();
             guardarPronostico(partido.id, s1, s2); 
         };
     }
@@ -872,7 +976,15 @@ async function refrescarDatosPartidos() {
 async function refrescarContenido() {
     const contenedorScroll = document.getElementById('partidos-contenido-scroll');
     if (!contenedorScroll) return;
-    if (currentJugador) { await cargarPronosticos(currentJugador.id, false); }
+    
+    // Asegurar que gruposSeleccion esté cargado
+    if (currentJugador) {
+        await cargarPronosticos(currentJugador.id, false);
+        const especialesData = cargarPronosticosEspecialesLocal();
+        if (especialesData.grupos) {
+            Object.assign(gruposSeleccion, especialesData.grupos);
+        }
+    }
     
     const fechaSim = simGetFechaStr ? simGetFechaStr() : new Date().toISOString().split('T')[0];
     const horaSim = simGetHoraStr ? simGetHoraStr() : new Date().toTimeString().split(' ')[0].substring(0,5);
@@ -940,6 +1052,7 @@ export async function renderizarPartidos(contenedor, datosCuenta) {
     if (!contenedor) return;
     currentJugador = datosCuenta;
     detenerCountdown();
+    detenerActualizacionEnVivo();
     tempPronosticos.clear();
     for (const [ptdId, timeout] of syncIntervals) { clearTimeout(timeout); }
     syncIntervals.clear();
@@ -947,6 +1060,12 @@ export async function renderizarPartidos(contenedor, datosCuenta) {
     await cargarEquipos();
     await cargarPartidos();
     await cargarPronosticos(datosCuenta.id);
+    
+    // Cargar gruposSeleccion desde localStorage
+    const especialesData = cargarPronosticosEspecialesLocal();
+    if (especialesData.grupos) {
+        Object.assign(gruposSeleccion, especialesData.grupos);
+    }
     
     if (!simuladorSuscrito && typeof onSimuladorCambio === 'function') { 
         simuladorSuscrito = true; 
@@ -965,8 +1084,16 @@ export async function renderizarPartidos(contenedor, datosCuenta) {
     document.querySelectorAll('.partidos-tab').forEach(tab => { tab.onclick = () => cambiarTab(tab.dataset.tab); });
     refrescarContenido();
     
+    iniciarActualizacionEnVivo();
+    
     document.addEventListener('visibilitychange', () => {
-        if (document.hidden) { detenerCountdown(); } 
-        else if (document.querySelectorAll('.partido-countdown').length > 0) { iniciarCountdown(); actualizarCountdowns(); }
+        if (document.hidden) { 
+            detenerCountdown();
+            detenerActualizacionEnVivo();
+        } else { 
+            if (document.querySelectorAll('.partido-countdown').length > 0) { iniciarCountdown(); actualizarCountdowns(); }
+            iniciarActualizacionEnVivo();
+            refrescarContenido();
+        }
     });
 }
