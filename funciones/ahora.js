@@ -184,13 +184,8 @@ async function guardarPronosticoAhora(ptdId, s1, s2) {
             pronosticosCache[ptdId] = { s1, s2 };
             mostrarToast('✅ Pronóstico guardado', 'ok');
             
-            const card = document.querySelector(`.ahora-card[data-id="${ptdId}"]`);
-            if (card) {
-                const pronoDiv = card.querySelector('.ahora-pronostico');
-                if (pronoDiv) {
-                    pronoDiv.innerHTML = `<span style="font-size:12px;color:#007aff;">⚽ Tu pronóstico: ${s1} - ${s2}</span>`;
-                }
-            }
+            // No actualizamos el texto de la card para mantener "Haga su pronóstico acá!"
+            // La card ya tiene el mensaje fijo
             
             if (ptdId === 1 && globalCambiarVistaCallback) {
                 setTimeout(() => {
@@ -236,7 +231,7 @@ function abrirModalPronostico(partido) {
                 ${fechaFormateada} · ${formatearHora12h(partido.hor)}
             </div>
             
-            <!-- FONDO DE CANCHA DE FÚTBOL (igual que en partidos.js) -->
+            <!-- FONDO DE CANCHA DE FÚTBOL -->
             <div style="background: linear-gradient(135deg, #0a2f1f 0%, #1a5a3a 100%); border-radius: 20px; padding: 16px; margin-bottom: 20px; position: relative; overflow: hidden;">
                 <!-- Líneas de césped decorativas -->
                 <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: repeating-linear-gradient(90deg, rgba(0,0,0,0.1) 0px, rgba(0,0,0,0.1) 2px, transparent 2px, transparent 20px); pointer-events: none;"></div>
@@ -250,9 +245,9 @@ function abrirModalPronostico(partido) {
                 <div style="position: absolute; top: 0; left: 50%; width: 2px; height: 100%; background: rgba(255,255,255,0.15); transform: translateX(-50%); pointer-events: none;"></div>
                 <!-- Punto central -->
                 <div style="position: absolute; top: 50%; left: 50%; width: 6px; height: 6px; background: rgba(255,255,255,0.3); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;"></div>
-                <!-- Área penal izquierda (simulada) -->
+                <!-- Área penal izquierda -->
                 <div style="position: absolute; top: 50%; left: 0; width: 30px; height: 60px; border: 2px solid rgba(255,255,255,0.15); border-left: none; transform: translateY(-50%); pointer-events: none;"></div>
-                <!-- Área penal derecha (simulada) -->
+                <!-- Área penal derecha -->
                 <div style="position: absolute; top: 50%; right: 0; width: 30px; height: 60px; border: 2px solid rgba(255,255,255,0.15); border-right: none; transform: translateY(-50%); pointer-events: none;"></div>
                 
                 <div style="position: relative; z-index: 10; display:flex; justify-content:space-between; align-items:center;">
@@ -387,14 +382,10 @@ async function renderizarAhora(contenedor, datosCuenta) {
             <div id="ahora-partidos-lista">
                 ${partidosHoy.map(p => {
                     const countdown = calcularCountdown(p.fch.split('T')[0], p.hor);
-                    const pronostico = pronosticosCache[p.id];
-                    const pronosticoHTML = pronostico 
-                        ? `<div class="ahora-pronostico" style="margin-top:12px;text-align:center;padding-top:8px;border-top:1px solid #e5e5ea;">
-                            <span style="font-size:12px;color:#007aff;">⚽ Tu pronóstico: ${pronostico.s1} - ${pronostico.s2}</span>
-                           </div>`
-                        : `<div class="ahora-pronostico" style="margin-top:12px;text-align:center;padding-top:8px;border-top:1px solid #e5e5ea;">
-                            <span style="font-size:11px;color:#8e8e93;">⚽ Haz clic para pronosticar</span>
-                           </div>`;
+                    // SIEMPRE mostramos el mensaje "Haga su pronóstico acá!" sin importar si tiene pronóstico
+                    const pronosticoHTML = `<div class="ahora-pronostico" style="margin-top:12px;text-align:center;padding-top:8px;border-top:1px solid #e5e5ea;">
+                        <span style="font-size:12px;color:#007aff;font-weight:500;">⚽ Haga su pronóstico acá!</span>
+                    </div>`;
                     
                     return `
                         <div class="ahora-card" data-id="${p.id}" style="background:#fff;border-radius:14px;padding:16px;margin-bottom:12px;border:1.5px solid #007aff;cursor:pointer;">
