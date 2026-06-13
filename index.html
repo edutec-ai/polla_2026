@@ -13,5 +13,50 @@
 </head>
 <body>
     <div id="app-root"></div>
+    <!-- Toast para mensajes flotantes -->
+<div id="app-toast" style="
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 30px;
+    font-size: 13px;
+    font-weight: 500;
+    z-index: 10000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    text-align: center;
+    max-width: 85%;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+"></div>
+
+<style>
+    .toast.show {
+        opacity: 1 !important;
+    }
+    .toast.ok {
+        background: rgba(52, 199, 89, 0.9);
+    }
+    .toast.err {
+        background: rgba(255, 59, 48, 0.9);
+    }
+    .toast.info {
+        background: rgba(0, 122, 255, 0.9);
+    }
+    @media (max-width: 600px) {
+        #app-toast {
+            font-size: 11px;
+            padding: 8px 16px;
+            white-space: normal;
+            max-width: 90%;
+        }
+    }
+</style>
 </body>
 </html>
