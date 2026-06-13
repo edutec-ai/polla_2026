@@ -1,11 +1,12 @@
 // ahora.js - Módulo de partidos de hoy
 // VERSIÓN TABLA COMPACTA - 3 COLUMNAS
 // Columnas: LOCAL | VS (VS + HORA + countdown/marcador + estado) | VISITANTE
-// - Scroll vertical DENTRO de la card (no en la pantalla)
+// - Scroll vertical DENTRO de la card
 // - SIN scroll horizontal
 // - Hora integrada dentro de la columna VS
 // - SIN ícono de pronóstico
 // - SIN fecha en el encabezado
+// - CORREGIDO: Usa t90_gol_* como fallback para partidos EN VIVO
 // - Actualización de countdown cada minuto
 // - Redirección a partidos.js al hacer clic en cualquier fila
 
@@ -91,7 +92,7 @@ function calcularCountdown(fechaPartido, horaPartido) {
     return `Faltan ${horas}h ${minutos}m`;
 }
 
-// ========== OBTENER ESTADO DEL PARTIDO ==========
+// ========== OBTENER ESTADO DEL PARTIDO (CORREGIDO CON FALLBACK) ==========
 function getEstadoPartido(partido) {
     const est = Number(partido.est);
     
@@ -108,8 +109,13 @@ function getEstadoPartido(partido) {
         };
     }
     if (est === 2 || est === 3) {
-        const golLoc = partido.gol_loc || 0;
-        const golVis = partido.gol_vis || 0;
+        // FALLBACK: si gol_loc/gol_vis son undefined, usar t90_gol_*
+        const golLoc = (partido.gol_loc !== undefined && partido.gol_loc !== null) 
+            ? partido.gol_loc 
+            : (partido.t90_gol_loc || 0);
+        const golVis = (partido.gol_vis !== undefined && partido.gol_vis !== null) 
+            ? partido.gol_vis 
+            : (partido.t90_gol_vis || 0);
         return { 
             tipo: 'envivo',
             marcador: `${golLoc} - ${golVis}`,
@@ -167,7 +173,7 @@ function detenerCountdownAhora() {
     countdownActivo = false;
 }
 
-// ========== RENDERIZAR PRINCIPAL (SIN SCROLL HORIZONTAL) ==========
+// ========== RENDERIZAR PRINCIPAL ==========
 async function renderizarAhora(contenedor, datosCuenta) {
     if (!contenedor) return;
     
@@ -332,7 +338,6 @@ async function renderizarAhora(contenedor, datosCuenta) {
                 top: 0;
                 z-index: 1;
             }
-            /* Anchos de columna fijos para evitar desborde */
             .ahora-tabla th:nth-child(1),
             .ahora-tabla td:nth-child(1) {
                 width: 30%;
@@ -383,9 +388,6 @@ async function renderizarAhora(contenedor, datosCuenta) {
                 }
                 .ahora-tabla-container {
                     max-height: calc(100vh - 140px);
-                }
-                .vs-content {
-                    font-size: 11px;
                 }
             }
         </style>
