@@ -1,9 +1,12 @@
 // funciones/partidos.js
 // Módulo de Partidos - La Polla Mundialista 2026
 // CORREGIDO:
-// - Tabla de posiciones: columna Equipo FLEXIBLE, demás columnas ancho fijo
-// - Responsive: scroll horizontal en móvil, columna Equipo se expande
-// - Orden correcto: puntos > diferencia > goles a favor
+// - Para partidos EN VIVO: usa t90_gol_* como fallback cuando gol_* es undefined
+// - NO actualiza cache hasta que Velneo confirme éxito (COD=1)
+// - Lee respuesta de Velneo (COD y DES)
+// - Revertir a valor original si hay error
+// - Tabla de posiciones con columna flexible
+// - Redirección desde ahora.js funciona correctamente
 
 import { onSimuladorCambio, simGetFechaStr, simGetHoraStr } from './lab.js';
 import { gruposSeleccion } from './especiales.js';
@@ -178,14 +181,23 @@ function getEstadoPartidoPorEst(partido) {
     };
 }
 
+// ========== FUNCIÓN CORREGIDA: usa t90_gol_* como fallback para partidos EN VIVO ==========
 function getMarcadorEnVivo(partido) {
     const est = Number(partido.est);
     if (est === 2 || est === 3) {
+        // Si gol_loc/gol_vis están undefined, usar t90_gol_* como fallback
+        const golLoc = (partido.gol_loc !== undefined && partido.gol_loc !== null) 
+            ? partido.gol_loc 
+            : (partido.t90_gol_loc || 0);
+        const golVis = (partido.gol_vis !== undefined && partido.gol_vis !== null) 
+            ? partido.gol_vis 
+            : (partido.t90_gol_vis || 0);
+        
         return { 
             tieneMarcador: true, 
             texto: 'EN VIVO',
-            gol_loc: partido.gol_loc || 0,
-            gol_vis: partido.gol_vis || 0
+            gol_loc: golLoc,
+            gol_vis: golVis
         };
     }
     return null;
@@ -321,10 +333,21 @@ function getPtsBase(fase) {
 
 function getResultadoReal(partidoId) { 
     const real = resultadosRealesCache[partidoId]; 
-    return real && real.gol_loc !== null ? { gol_loc: real.gol_loc, gol_vis: real.gol_vis } : null; 
+    if (real && real.gol_loc !== null) {
+        return { gol_loc: real.gol_loc, gol_vis: real.gol_vis };
+    }
+    // Fallback: buscar el partido en partidosCache
+    const partido = partidosCache.find(p => p.id === partidoId);
+    if (partido && Number(partido.est) === 4) {
+        return { 
+            gol_loc: partido.t90_gol_loc || 0, 
+            gol_vis: partido.t90_gol_vis || 0 
+        };
+    }
+    return null;
 }
 
-// ========== TABLA DE POSICIONES CORREGIDA - COLUMNA EQUIPO FLEXIBLE ==========
+// ========== TABLA DE POSICIONES CORREGIDA ==========
 function renderTablaPosiciones(grupo) {
     const equiposGrupo = equiposCache.filter(e => obtenerGrupoPorEquipo(e.name) === grupo);
     const clasificados = gruposSeleccion[grupo] || {};
@@ -333,7 +356,6 @@ function renderTablaPosiciones(grupo) {
         return '<div style="padding:20px;text-align:center;color:#8e8e93;">Sin datos del grupo ' + grupo + '</div>';
     }
     
-    // Calcular estadísticas de cada equipo
     equiposGrupo.forEach(eq => {
         eq.pj = 0;
         eq.pg = 0;
@@ -366,8 +388,15 @@ function renderTablaPosiciones(grupo) {
                         golesContra = esLocal ? resultado.gol_vis : resultado.gol_loc;
                     }
                 } else if (est === 2 || est === 3) {
-                    golesFavor = esLocal ? (p.gol_loc || 0) : (p.gol_vis || 0);
-                    golesContra = esLocal ? (p.gol_vis || 0) : (p.gol_loc || 0);
+                    // Para partidos en vivo, usar el marcador actual (con fallback a t90)
+                    const marcador = getMarcadorEnVivo(p);
+                    if (marcador) {
+                        golesFavor = esLocal ? marcador.gol_loc : marcador.gol_vis;
+                        golesContra = esLocal ? marcador.gol_vis : marcador.gol_loc;
+                    } else {
+                        golesFavor = esLocal ? (p.gol_loc || 0) : (p.gol_vis || 0);
+                        golesContra = esLocal ? (p.gol_vis || 0) : (p.gol_loc || 0);
+                    }
                 }
                 
                 if (golesFavor !== undefined) {
@@ -389,14 +418,12 @@ function renderTablaPosiciones(grupo) {
         eq.pts = (eq.pg * 3) + eq.pe;
     });
     
-    // Ordenar: puntos > diferencia > goles a favor
     equiposGrupo.sort((a, b) => {
         if (a.pts !== b.pts) return b.pts - a.pts;
         if (a.dif !== b.dif) return b.dif - a.dif;
         return b.gf - a.gf;
     });
     
-    // Generar tabla HTML - Columna Equipo FLEXIBLE, demás fijas
     let html = `
         <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
             <style>
@@ -417,13 +444,11 @@ function renderTablaPosiciones(grupo) {
                     padding: 10px 6px;
                     border-bottom: 0.5px solid #f0f0f0;
                 }
-                /* Columna 1: Posición - ancho fijo */
                 .tabla-posiciones th:nth-child(1),
                 .tabla-posiciones td:nth-child(1) {
                     width: 45px;
                     text-align: center;
                 }
-                /* Columna 2: Equipo - FLEXIBLE (se expande y contrae) */
                 .tabla-posiciones th:nth-child(2),
                 .tabla-posiciones td:nth-child(2) {
                     text-align: left;
@@ -431,7 +456,6 @@ function renderTablaPosiciones(grupo) {
                     word-break: break-word;
                     min-width: 140px;
                 }
-                /* Columnas 3 a 10: ancho fijo */
                 .tabla-posiciones th:nth-child(n+3),
                 .tabla-posiciones td:nth-child(n+3) {
                     width: 45px;
@@ -466,12 +490,10 @@ function renderTablaPosiciones(grupo) {
         if (esClasificado1) badgeClasificacion = ' 🏆[1]';
         else if (esClasificado2) badgeClasificacion = ' ✅[2]';
         
-        // Determinar color de fondo para posiciones destacadas
         let bgColor = '';
         if (posicion === 1) bgColor = 'rgba(255, 215, 0, 0.08)';
         else if (posicion === 2) bgColor = 'rgba(192, 192, 192, 0.08)';
         
-        // Formatear diferencia de goles con signo +
         const difFormateado = eq.dif > 0 ? `+${eq.dif}` : eq.dif;
         
         html += `
@@ -542,6 +564,7 @@ function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimerDia = 
     if (resultadoReal && estadoEst.estado === 'terminado') {
         centroHTML = `<div style="font-size:20px; font-weight:700; color:#000;">${resultadoReal.gol_loc} - ${resultadoReal.gol_vis}</div>`;
     } else if (estadoEst.estado === 'envivo' && marcadorEnVivo) {
+        // Usar el marcador de getMarcadorEnVivo (que ya tiene fallback a t90_gol_*)
         centroHTML = `
             <div style="font-size:20px; font-weight:700; color:#ff3b30;">${marcadorEnVivo.gol_loc} - ${marcadorEnVivo.gol_vis}</div>
             <div style="font-size:10px; color:#ff9500; margin-top:4px;">🔴 ${marcadorEnVivo.texto}</div>
@@ -720,8 +743,16 @@ async function actualizarMarcadoresEnVivo() {
             if (card) {
                 const centroDiv = card.querySelector('.centro-marcador-envivo');
                 if (centroDiv) {
+                    // Usar fallback a t90_gol_* si es necesario
+                    const golLoc = (partido.gol_loc !== undefined && partido.gol_loc !== null) 
+                        ? partido.gol_loc 
+                        : (partido.t90_gol_loc || 0);
+                    const golVis = (partido.gol_vis !== undefined && partido.gol_vis !== null) 
+                        ? partido.gol_vis 
+                        : (partido.t90_gol_vis || 0);
+                    
                     centroDiv.innerHTML = `
-                        <div style="font-size:20px; font-weight:700; color:#ff3b30;">${partido.gol_loc || 0} - ${partido.gol_vis || 0}</div>
+                        <div style="font-size:20px; font-weight:700; color:#ff3b30;">${golLoc} - ${golVis}</div>
                         <div style="font-size:10px; color:#ff9500; margin-top:4px;">🔴 EN VIVO</div>
                     `;
                 }
@@ -781,14 +812,16 @@ function scrollAPrimerDestacado() {
     }, 500);
 }
 
+// ========== FUNCIÓN CORREGIDA: GUARDAR PRONÓSTICO CON RESPUESTA DE VELNEO ==========
 async function guardarPronostico(ptdId, s1, s2) {
     if (!currentJugador) { 
         mostrarToast('Inicia sesión primero', 'err'); 
         return; 
     }
     
-    iniciarSincronizacionPeriodica(ptdId, s1, s2);
-    actualizarCardPartido(ptdId, s1, s2);
+    // Guardar el valor ORIGINAL antes de intentar cambiar
+    const originalPronostico = pronosticosCache[ptdId];
+    
     mostrarToast('💾 Guardando...', 'info');
     
     try {
@@ -804,38 +837,50 @@ async function guardarPronostico(ptdId, s1, s2) {
             })
         });
         
-        if (response.ok) { 
+        const respuesta = await response.json();
+        console.log('[Partidos] Respuesta de Velneo:', respuesta);
+        
+        if (respuesta.COD === 1) {
+            // ✅ ÉXITO: Actualizar cache y UI
             pronosticosCache[ptdId] = { s1, s2 };
             actualizarLocalStorage();
-            mostrarToast('✅ Pronóstico guardado', 'ok');
+            actualizarCardPartido(ptdId, s1, s2);
+            mostrarToast('✅ Pronóstico guardado correctamente', 'ok');
             
+            // Limpiar cualquier sincronización pendiente
             tempPronosticos.delete(ptdId);
             if (syncIntervals.has(ptdId)) {
                 clearTimeout(syncIntervals.get(ptdId));
                 syncIntervals.delete(ptdId);
             }
             
+            // Si es el primer partido, redirigir a AHORA
             if (ptdId === 1 && globalCambiarVistaCallback) {
                 setTimeout(() => { 
                     globalCambiarVistaCallback('ahora', currentJugador); 
                 }, 1500);
             }
         } else {
-            mostrarToast('❌ Error al guardar', 'err');
-            tempPronosticos.delete(ptdId);
-            if (syncIntervals.has(ptdId)) { 
-                clearTimeout(syncIntervals.get(ptdId)); 
-                syncIntervals.delete(ptdId); 
+            // ❌ ERROR: Revertir a valor original
+            if (originalPronostico) {
+                pronosticosCache[ptdId] = originalPronostico;
+                actualizarCardPartido(ptdId, originalPronostico.s1, originalPronostico.s2);
+                mostrarToast(`❌ ${respuesta.DES || 'Error al guardar el pronóstico'}`, 'err');
+            } else {
+                // Si no había pronóstico original, mostrar mensaje de error
+                mostrarToast(`❌ ${respuesta.DES || 'No se pudo guardar el pronóstico'}`, 'err');
             }
         }
+        
     } catch (error) { 
         console.error('Error al guardar:', error);
-        mostrarToast('❌ Error de conexión', 'err');
-        tempPronosticos.delete(ptdId);
-        if (syncIntervals.has(ptdId)) { 
-            clearTimeout(syncIntervals.get(ptdId)); 
-            syncIntervals.delete(ptdId); 
+        
+        // ❌ ERROR DE RED: Revertir a valor original si existe
+        if (originalPronostico) {
+            pronosticosCache[ptdId] = originalPronostico;
+            actualizarCardPartido(ptdId, originalPronostico.s1, originalPronostico.s2);
         }
+        mostrarToast('❌ Error de conexión. Intenta nuevamente.', 'err');
     }
 }
 
