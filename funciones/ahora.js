@@ -1,4 +1,5 @@
 // ahora.js - Modulo de partidos de hoy
+// Muestra SOLO los partidos programados para la fecha actual con countdowns
 
 import { cargarPartidos, getBandera, formatearHora12h } from './partidos.js';
 
@@ -36,7 +37,7 @@ function corregirFechasSegunVelneo(partidos) {
     return partidos.map(p => {
         if ((p.nom_loc === 'Canada' && p.nom_vis === 'Bosnia') ||
             (p.nom_loc === 'Bosnia' && p.nom_vis === 'Canada')) {
-            return { ...p, fch: '2026-06-12', hor: '14:00:00', est: 1 };
+            return { ...p, fch: '2026-06-12', hor: '14:00:00', est: 4, t90_gol_loc: 1, t90_gol_vis: 1, gol_loc: 1, gol_vis: 1 };
         }
         if ((p.nom_loc === 'EE. UU.' && p.nom_vis === 'Paraguay') ||
             (p.nom_loc === 'Paraguay' && p.nom_vis === 'EE. UU.')) {
@@ -108,6 +109,19 @@ function actualizarCountdownsEnCards() {
     countdownElements.forEach(el => {
         const fechaPartido = el.dataset.fch;
         const horaPartido = el.dataset.hor;
+        const est = parseInt(el.dataset.est);
+        
+        if (est === 4) {
+            el.textContent = 'TERMINADO';
+            el.style.color = '#34c759';
+            return;
+        }
+        if (est === 2 || est === 3) {
+            el.textContent = 'EN VIVO';
+            el.style.color = '#ff3b30';
+            return;
+        }
+        
         if (fechaPartido && horaPartido) {
             const countdown = calcularCountdown(fechaPartido, horaPartido);
             if (countdown) {
@@ -146,45 +160,6 @@ function mostrarToast(msg, tipo) {
     }
 }
 
-async function guardarPronosticoAhora(ptdId, s1, s2) {
-    if (!currentJugador) {
-        mostrarToast('Inicia sesion primero', 'err');
-        return;
-    }
-    
-    mostrarToast('Guardando...', 'info');
-    
-    try {
-        const response = await fetch(BASE_V2 + '/_process/API_PUT_PAR?api_key=' + KEY, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({
-                jug: currentJugador.id,
-                id: ptdId,
-                pro_gol_loc: s1,
-                pro_gol_vis: s2,
-                pro_res: s1 > s2 ? '1' : s2 > s1 ? '2' : 'X'
-            })
-        });
-        
-        if (response.ok) {
-            pronosticosCache[ptdId] = { s1: s1, s2: s2 };
-            mostrarToast('Pronostico guardado', 'ok');
-            
-            if (ptdId === 1 && globalCambiarVistaCallback) {
-                setTimeout(function() {
-                    globalCambiarVistaCallback('partidos', currentJugador);
-                }, 1500);
-            }
-        } else {
-            mostrarToast('Error al guardar', 'err');
-        }
-    } catch (error) {
-        console.error('Error al guardar:', error);
-        mostrarToast('Error de conexion', 'err');
-    }
-}
-
 function cambiarTabPartidosATodos() {
     const tabTodos = document.querySelector('.partidos-tab[data-tab="todos"]');
     if (tabTodos) {
@@ -198,21 +173,6 @@ async function renderizarAhora(contenedor, datosCuenta) {
     currentJugador = datosCuenta;
     detenerCountdownAhora();
     
-    if (currentJugador) {
-        try {
-            const response = await fetch(BASE_V2 + '/fifa_jug_pro?api_key=' + KEY + '&filter[id]=' + currentJugador.id);
-            const data = await response.json();
-            pronosticosCache = {};
-            if (data.fifa_jug_pro) {
-                data.fifa_jug_pro.forEach(function(p) {
-                    pronosticosCache[p.ptd] = { s1: p.pro_gol_loc || 0, s2: p.pro_gol_vis || 0 };
-                });
-            }
-        } catch (error) {
-            console.error('Error cargando pronosticos:', error);
-        }
-    }
-    
     let partidos = await cargarPartidos();
     partidos = corregirFechasSegunVelneo(partidos);
     const partidosHoy = obtenerPartidosDeHoy(partidos);
@@ -225,7 +185,35 @@ async function renderizarAhora(contenedor, datosCuenta) {
     let cardsHtml = '';
     for (let i = 0; i < partidosHoy.length; i++) {
         const p = partidosHoy[i];
-        const countdown = calcularCountdown(p.fch.split('T')[0], p.hor);
+        const estPartido = Number(p.est);
+        
+        let estadoTexto = '';
+        let estadoColor = '';
+        let marcadorHTML = '';
+        
+        if (estPartido === 4) {
+            estadoTexto = 'TERMINADO';
+            estadoColor = '#34c759';
+            const golesLocal = p.t90_gol_loc !== undefined ? p.t90_gol_loc : (p.gol_loc || 0);
+            const golesVisita = p.t90_gol_vis !== undefined ? p.t90_gol_vis : (p.gol_vis || 0);
+            marcadorHTML = '<div style="margin-top:8px;margin-bottom:4px;text-align:center;font-size:20px;font-weight:800;color:#1c1c1e;">' + golesLocal + ' - ' + golesVisita + '</div>';
+        } else if (estPartido === 2 || estPartido === 3) {
+            estadoTexto = 'EN VIVO';
+            estadoColor = '#ff3b30';
+            const golesLocal = p.gol_loc || 0;
+            const golesVisita = p.gol_vis || 0;
+            marcadorHTML = '<div style="margin-top:8px;margin-bottom:4px;text-align:center;font-size:20px;font-weight:800;color:#ff3b30;">' + golesLocal + ' - ' + golesVisita + '</div>';
+        } else if (estPartido === 1) {
+            const countdown = calcularCountdown(p.fch.split('T')[0], p.hor);
+            estadoTexto = countdown.texto;
+            estadoColor = countdown.negativo ? '#ff3b30' : '#ff9500';
+            marcadorHTML = '';
+        } else {
+            estadoTexto = 'PENDIENTE';
+            estadoColor = '#8e8e93';
+            marcadorHTML = '';
+        }
+        
         cardsHtml += `
             <div class="ahora-card" data-id="${p.id}" style="background:#fff;border-radius:14px;padding:16px;margin-bottom:12px;border:1.5px solid #007aff;cursor:pointer;">
                 <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
@@ -245,8 +233,9 @@ async function renderizarAhora(contenedor, datosCuenta) {
                         <div style="font-weight:600;font-size:13px;">${p.nom_vis}</div>
                     </div>
                 </div>
-                <div style="margin-top:12px;text-align:center;">
-                    <span class="ahora-countdown" data-fch="${p.fch.split('T')[0]}" data-hor="${p.hor}" style="font-size:14px;font-weight:600;color:${countdown.negativo ? '#ff3b30' : '#ff9500'};">${countdown.texto}</span>
+                ${marcadorHTML}
+                <div style="margin-top:8px;text-align:center;">
+                    <span class="ahora-countdown" data-fch="${p.fch.split('T')[0]}" data-hor="${p.hor}" data-est="${estPartido}" style="font-size:14px;font-weight:600;color:${estadoColor};">${estadoTexto}</span>
                 </div>
                 <div class="ahora-pronostico" style="margin-top:12px;text-align:center;padding-top:8px;border-top:1px solid #e5e5ea;">
                     <span style="font-size:12px;color:#007aff;font-weight:500;">Haga su pronostico aca!</span>
