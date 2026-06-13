@@ -1,16 +1,19 @@
 // ahora.js - Módulo de partidos de hoy
-// CORREGIDO:
-// - Usa fecha/hora LOCAL del computador (NO UTC)
-// - Muestra TODOS los partidos del día (terminados, en vivo, pendientes)
-// - NO muestra pronóstico ni puntos en las tarjetas
-// - Al hacer clic → redirige a partidos.js con tab "TODOS"
-// - SIN HARDCODES - 100% depende del campo 'est' de la API de Velneo
+// VERSIÓN TABLA COMPACTA - 3 COLUMNAS
+// Columnas: LOCAL | VS (VS + HORA + countdown/marcador + estado) | VISITANTE
+// - Hora integrada dentro de la columna VS
+// - SIN ícono de pronóstico
+// - SIN fecha en el encabezado
+// - Una sola card con tabla de múltiples filas
+// - Actualización de countdown cada minuto
+// - Redirección a partidos.js al hacer clic en cualquier fila
 
 import { cargarPartidos, getBandera, formatearHora12h } from './partidos.js';
 
 let currentJugador = null;
 let pronosticosCache = {};
-let resultadosRealesCache = {};
+let countdownInterval = null;
+let countdownActivo = false;
 
 // ========== CALLBACK PARA CAMBIAR VISTA ==========
 let globalCambiarVistaCallback = null;
@@ -21,12 +24,10 @@ export function setCambiarVistaCallback(callback) {
 
 // ========== SUSCRIPCIÓN AL SIMULADOR ==========
 let simuladorSuscrito = false;
-let simuladorCallback = null;
 
 export function suscribirAhoraAlSimulador(callback) {
     if (!simuladorSuscrito && typeof callback === 'function') {
         simuladorSuscrito = true;
-        simuladorCallback = callback;
         console.log('[Ahora] Suscrito al simulador');
     }
 }
@@ -38,7 +39,7 @@ export function refrescarAhora() {
     }
 }
 
-// ========== FECHA LOCAL (CORREGIDO - NO UTC) ==========
+// ========== FECHA LOCAL ==========
 function getLocalDate() {
     const ahora = new Date();
     const year = ahora.getFullYear();
@@ -47,17 +48,7 @@ function getLocalDate() {
     return `${year}-${month}-${day}`;
 }
 
-function getLocalDateTime() {
-    const ahora = new Date();
-    const year = ahora.getFullYear();
-    const month = String(ahora.getMonth() + 1).padStart(2, '0');
-    const day = String(ahora.getDate()).padStart(2, '0');
-    const hours = String(ahora.getHours()).padStart(2, '0');
-    const minutes = String(ahora.getMinutes()).padStart(2, '0');
-    return { fecha: `${year}-${month}-${day}`, hora: `${hours}:${minutes}` };
-}
-
-// ========== FILTRAR PARTIDOS DE HOY (FECHA LOCAL) ==========
+// ========== FILTRAR PARTIDOS DE HOY ==========
 function obtenerPartidosDeHoy(partidos) {
     const hoy = getLocalDate();
     return partidos.filter(p => {
@@ -66,49 +57,123 @@ function obtenerPartidosDeHoy(partidos) {
     });
 }
 
-// ========== OBTENER ESTADO DEL PARTIDO DESDE API ==========
-function getEstadoPartido(partido) {
-    const est = Number(partido.est);
+// ========== CALCULAR COUNTDOWN ==========
+function calcularCountdown(fechaPartido, horaPartido) {
+    const ahora = new Date();
+    const [year, month, day] = fechaPartido.split('-');
+    const [hour, minute] = horaPartido.split(':');
+    const fechaObj = new Date(year, month - 1, day, hour, minute, 0);
+    const diffMs = fechaObj - ahora;
     
-    if (est === 4) {
-        return { texto: 'TERMINADO', color: '#34c759', icono: '✅', editable: false };
+    if (diffMs <= 0) {
+        return null;
     }
-    if (est === 2 || est === 3) {
-        return { texto: 'EN VIVO', color: '#ff3b30', icono: '🔴', editable: false };
+    
+    const diffSegundos = Math.floor(diffMs / 1000);
+    const horas = Math.floor(diffSegundos / 3600);
+    const minutos = Math.floor((diffSegundos % 3600) / 60);
+    
+    if (horas >= 24) {
+        const dias = Math.floor(horas / 24);
+        const horasRest = horas % 24;
+        return `Faltan ${dias}d ${horasRest}h`;
     }
-    return { texto: 'PENDIENTE', color: '#ff9500', icono: '⏱️', editable: true };
+    
+    if (horas === 0 && minutos === 0) {
+        return `Faltan <1m`;
+    }
+    
+    if (horas === 0) {
+        return `Faltan ${minutos}m`;
+    }
+    
+    return `Faltan ${horas}h ${minutos}m`;
 }
 
-// ========== OBTENER MARCADOR DESDE API ==========
-function getMarcador(partido) {
+// ========== OBTENER ESTADO DEL PARTIDO ==========
+function getEstadoPartido(partido) {
     const est = Number(partido.est);
     
     if (est === 4) {
         const golLoc = partido.t90_gol_loc || partido.gol_loc || 0;
         const golVis = partido.t90_gol_vis || partido.gol_vis || 0;
-        return { golLoc, golVis, mostrar: true };
+        return { 
+            tipo: 'terminado',
+            marcador: `${golLoc} - ${golVis}`,
+            badge: 'TERMINADO',
+            badgeColor: '#34c759',
+            badgeIcono: '✅',
+            editable: false 
+        };
     }
     if (est === 2 || est === 3) {
-        return { golLoc: partido.gol_loc || 0, golVis: partido.gol_vis || 0, mostrar: true };
+        const golLoc = partido.gol_loc || 0;
+        const golVis = partido.gol_vis || 0;
+        return { 
+            tipo: 'envivo',
+            marcador: `${golLoc} - ${golVis}`,
+            badge: 'EN VIVO',
+            badgeColor: '#ff3b30',
+            badgeIcono: '🔴',
+            editable: false 
+        };
     }
-    return { golLoc: 0, golVis: 0, mostrar: false };
+    return { 
+        tipo: 'pendiente',
+        marcador: null,
+        badge: null,
+        badgeColor: null,
+        badgeIcono: null,
+        editable: true 
+    };
 }
 
-// ========== CAMBIAR A TAB "TODOS" EN PARTIDOS ==========
-function cambiarTabPartidosATodos() {
-    const tabTodos = document.querySelector('.partidos-tab[data-tab="todos"]');
-    if (tabTodos) {
-        tabTodos.click();
-    }
+// ========== ACTUALIZAR COUNTDOWNS EN TIEMPO REAL ==========
+function actualizarCountdownsEnTabla() {
+    const countdownElements = document.querySelectorAll('.ahora-countdown');
+    if (countdownElements.length === 0) return;
+    
+    countdownElements.forEach(el => {
+        const fechaPartido = el.dataset.fch;
+        const horaPartido = el.dataset.hor;
+        if (fechaPartido && horaPartido) {
+            const countdown = calcularCountdown(fechaPartido, horaPartido);
+            if (countdown) {
+                el.innerHTML = countdown;
+                el.style.color = '#ff9500';
+            } else {
+                refrescarAhora();
+            }
+        }
+    });
 }
 
-// ========== RENDERIZAR PRINCIPAL ==========
+function iniciarCountdownAhora() {
+    if (countdownInterval) clearInterval(countdownInterval);
+    countdownInterval = setInterval(() => {
+        if (!document.hidden && countdownActivo) {
+            actualizarCountdownsEnTabla();
+        }
+    }, 60000);
+    countdownActivo = true;
+}
+
+function detenerCountdownAhora() {
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+    }
+    countdownActivo = false;
+}
+
+// ========== RENDERIZAR PRINCIPAL (SIN FECHA) ==========
 async function renderizarAhora(contenedor, datosCuenta) {
     if (!contenedor) return;
     
     currentJugador = datosCuenta;
+    detenerCountdownAhora();
     
-    // Cargar pronósticos del usuario
+    // Cargar pronósticos del usuario (para lógica interna)
     if (currentJugador) {
         try {
             const BASE_V2 = 'https://server.sion.hysintegrar.com/fifa2026/vERP_2_dat_dat/v2';
@@ -132,82 +197,216 @@ async function renderizarAhora(contenedor, datosCuenta) {
     
     if (partidosHoy.length === 0) {
         contenedor.innerHTML = `
-            <div style="padding:20px;text-align:center;color:#8e8e93;">
-                ⚽ No hay partidos programados para hoy
+            <div style="background: #fff; border-radius: 20px; padding: 20px; text-align: center;">
+                <div style="font-size: 48px; margin-bottom: 16px;">⚽</div>
+                <div style="color: #8e8e93;">No hay partidos programados para hoy</div>
             </div>
         `;
         return;
     }
     
-    let cardsHtml = '';
+    // Generar filas de la tabla
+    let filasHtml = '';
     for (const p of partidosHoy) {
         const estado = getEstadoPartido(p);
-        const marcador = getMarcador(p);
-        const pronostico = pronosticosCache[p.id];
+        const countdown = calcularCountdown(p.fch?.split('T')[0], p.hor);
         const horaFormateada = formatearHora12h(p.hor);
         
-        let marcadorHTML = '';
-        if (marcador.mostrar) {
-            marcadorHTML = `
-                <div style="margin: 8px 0; text-align: center;">
-                    <span style="font-size: 24px; font-weight: 800; color: ${estado.color};">${marcador.golLoc} - ${marcador.golVis}</span>
+        // Construir contenido de la columna VS (integrada)
+        let vsContent = '';
+        
+        if (estado.tipo === 'terminado') {
+            vsContent = `
+                <div style="font-weight: 700; color: #8e8e93; margin-bottom: 8px;">VS</div>
+                <div style="font-size: 14px; font-weight: 600; color: #007aff; margin-bottom: 8px;">${horaFormateada}</div>
+                <div style="font-size: 18px; font-weight: 800; color: ${estado.badgeColor}; margin-bottom: 6px;">${estado.marcador}</div>
+                <div style="display: inline-flex; align-items: center; gap: 4px; background: ${estado.badgeColor}15; padding: 4px 10px; border-radius: 20px;">
+                    <span style="font-size: 12px;">${estado.badgeIcono}</span>
+                    <span style="font-size: 11px; font-weight: 600; color: ${estado.badgeColor};">${estado.badge}</span>
                 </div>
+            `;
+        } else if (estado.tipo === 'envivo') {
+            vsContent = `
+                <div style="font-weight: 700; color: #8e8e93; margin-bottom: 8px;">VS</div>
+                <div style="font-size: 14px; font-weight: 600; color: #007aff; margin-bottom: 8px;">${horaFormateada}</div>
+                <div style="font-size: 18px; font-weight: 800; color: ${estado.badgeColor}; margin-bottom: 6px;">${estado.marcador}</div>
+                <div style="display: inline-flex; align-items: center; gap: 4px; background: ${estado.badgeColor}15; padding: 4px 10px; border-radius: 20px;">
+                    <span style="font-size: 12px;">${estado.badgeIcono}</span>
+                    <span style="font-size: 11px; font-weight: 600; color: ${estado.badgeColor};">${estado.badge}</span>
+                </div>
+            `;
+        } else if (countdown) {
+            vsContent = `
+                <div style="font-weight: 700; color: #8e8e93; margin-bottom: 8px;">VS</div>
+                <div style="font-size: 14px; font-weight: 600; color: #007aff; margin-bottom: 8px;">${horaFormateada}</div>
+                <div class="ahora-countdown" data-fch="${p.fch?.split('T')[0]}" data-hor="${p.hor}" style="font-size: 13px; font-weight: 600; color: #ff9500;">${countdown}</div>
+            `;
+        } else {
+            vsContent = `
+                <div style="font-weight: 700; color: #8e8e93; margin-bottom: 8px;">VS</div>
+                <div style="font-size: 14px; font-weight: 600; color: #007aff; margin-bottom: 8px;">${horaFormateada}</div>
+                <div style="font-size: 11px; color: #8e8e93;">PENDIENTE</div>
             `;
         }
         
-        cardsHtml += `
-            <div class="ahora-card" data-id="${p.id}" data-fch="${p.fch?.split('T')[0] || ''}" data-hor="${p.hor || ''}" style="background:#fff;border-radius:14px;padding:16px;margin-bottom:12px;border:1.5px solid ${estado.color};cursor:pointer;">
-                <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
-                    <span style="font-size:12px;color:#8e8e93;">Grupo ${p.grupoCalculado || '?'}</span>
-                    <span style="font-size:12px;color:#8e8e93;">${horaFormateada}</span>
-                </div>
-                <div style="display:flex;align-items:center;justify-content:space-between;">
-                    <div style="text-align:center;flex:1;">
-                        <div style="font-size:40px;">${getBandera(p.nom_loc)}</div>
-                        <div style="font-weight:600;font-size:13px;">${p.nom_loc}</div>
+        filasHtml += `
+            <tr class="ahora-fila" data-id="${p.id}" style="cursor: pointer; border-bottom: 0.5px solid #f0f0f0;">
+                <td style="padding: 14px 8px; text-align: center; vertical-align: middle;">
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+                        <span style="font-size: 40px;">${getBandera(p.nom_loc)}</span>
+                        <span style="font-weight: 600; color: #1c1c1e; font-size: 14px;">${p.nom_loc}</span>
                     </div>
-                    <div style="text-align:center;min-width:60px;">
-                        <div style="font-size:18px;font-weight:700;color:#007aff;">VS</div>
+                </td>
+                <td style="padding: 14px 8px; text-align: center; vertical-align: middle; min-width: 130px;">
+                    ${vsContent}
+                </td>
+                <td style="padding: 14px 8px; text-align: center; vertical-align: middle;">
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+                        <span style="font-size: 40px;">${getBandera(p.nom_vis)}</span>
+                        <span style="font-weight: 600; color: #1c1c1e; font-size: 14px;">${p.nom_vis}</span>
                     </div>
-                    <div style="text-align:center;flex:1;">
-                        <div style="font-size:40px;">${getBandera(p.nom_vis)}</div>
-                        <div style="font-weight:600;font-size:13px;">${p.nom_vis}</div>
-                    </div>
-                </div>
-                ${marcadorHTML}
-                <div style="margin-top:8px;text-align:center;">
-                    <span style="font-size:14px;font-weight:600;color:${estado.color};">${estado.icono} ${estado.texto}</span>
-                </div>
-                <div style="margin-top:12px;text-align:center;padding-top:8px;border-top:1px solid #e5e5ea;">
-                    <span style="font-size:11px;color:#007aff;font-weight:500;">⚽ Haz clic para ver tu pronóstico</span>
-                </div>
-            </div>
+                </td>
+              </tr>
         `;
     }
     
     contenedor.innerHTML = `
-        <div style="padding:16px;">
-            <h2 style="font-size:18px;margin-bottom:16px;">⚽ Partidos de hoy</h2>
-            <div id="ahora-partidos-lista">
-                ${cardsHtml}
+        <style>
+            .ahora-tabla-container {
+                background: #ffffff;
+                border-radius: 20px;
+                overflow: hidden;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            }
+            .ahora-header {
+                padding: 20px 16px 12px 16px;
+                border-bottom: 1px solid #e5e5ea;
+                background: #ffffff;
+                text-align: center;
+            }
+            .ahora-titulo {
+                font-size: 20px;
+                font-weight: 700;
+                color: #1c1c1e;
+                margin-bottom: 4px;
+            }
+            .ahora-badge {
+                display: inline-block;
+                background: linear-gradient(135deg, #007aff 0%, #5856d6 100%);
+                color: white;
+                padding: 6px 14px;
+                border-radius: 20px;
+                font-size: 12px;
+                font-weight: 600;
+                margin-top: 6px;
+            }
+            .ahora-tabla {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            .ahora-tabla th {
+                padding: 12px 8px;
+                text-align: center;
+                background: #f9f9fb;
+                color: #8e8e93;
+                font-weight: 600;
+                font-size: 13px;
+                border-bottom: 1px solid #e5e5ea;
+            }
+            .ahora-fila:hover {
+                background: #f2f2f7;
+                transition: background 0.2s ease;
+            }
+            .ahora-footer {
+                padding: 16px;
+                text-align: center;
+                border-top: 1px solid #e5e5ea;
+                background: #f9f9fb;
+                font-size: 11px;
+                color: #8e8e93;
+            }
+            @media (max-width: 600px) {
+                .ahora-tabla th, .ahora-tabla td {
+                    padding: 10px 4px;
+                }
+                .ahora-tabla td div span:first-child {
+                    font-size: 32px;
+                }
+                .ahora-tabla td div span:nth-child(2) {
+                    font-size: 11px;
+                }
+                .ahora-countdown {
+                    font-size: 10px;
+                }
+                .ahora-tabla td:nth-child(2) {
+                    min-width: 110px;
+                }
+            }
+        </style>
+        
+        <div class="ahora-tabla-container">
+            <div class="ahora-header">
+                <div class="ahora-titulo">🏆 PARTIDOS DE HOY</div>
+                <div>
+                    <span class="ahora-badge">🎯 HAGA SUS PRONÓSTICOS ACÁ 🎯</span>
+                </div>
             </div>
-            <p style="font-size:11px;color:#8e8e93;text-align:center;margin-top:16px;">
-                💡 Haz clic en cualquier partido para ver tu pronóstico y detalles
-            </p>
+            
+            <div style="overflow-x: auto;">
+                <table class="ahora-tabla">
+                    <thead>
+                        <tr>
+                            <th>LOCAL</th>
+                            <th>VS</th>
+                            <th>VISITANTE</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${filasHtml}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="ahora-footer">
+                💡 Haz clic en cualquier fila para ver tu pronóstico y detalles
+            </div>
         </div>
     `;
     
-    // Eventos de clic en las tarjetas
-    document.querySelectorAll('.ahora-card').forEach(card => {
-        card.onclick = () => {
+    // Eventos de clic en las filas
+    document.querySelectorAll('.ahora-fila').forEach(fila => {
+        fila.onclick = () => {
             if (globalCambiarVistaCallback) {
                 globalCambiarVistaCallback('partidos', currentJugador);
                 setTimeout(() => {
-                    cambiarTabPartidosATodos();
+                    const tabTodos = document.querySelector('.partidos-tab[data-tab="todos"]');
+                    if (tabTodos) tabTodos.click();
                 }, 300);
             }
         };
     });
+    
+    // Iniciar countdowns si hay partidos pendientes
+    if (document.querySelectorAll('.ahora-countdown').length > 0) {
+        iniciarCountdownAhora();
+    }
+    
+    // Manejar visibilidad de la página
+    const visibilityHandler = () => {
+        if (document.hidden) {
+            detenerCountdownAhora();
+        } else {
+            if (document.querySelectorAll('.ahora-countdown').length > 0) {
+                iniciarCountdownAhora();
+                actualizarCountdownsEnTabla();
+            } else {
+                refrescarAhora();
+            }
+        }
+    };
+    
+    document.removeEventListener('visibilitychange', visibilityHandler);
+    document.addEventListener('visibilitychange', visibilityHandler);
 }
 
 export { renderizarAhora };
