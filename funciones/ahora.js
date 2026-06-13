@@ -1,10 +1,10 @@
 // ahora.js - Módulo de partidos de hoy
 // VERSIÓN TABLA COMPACTA - 3 COLUMNAS
 // Columnas: LOCAL | VS (VS + HORA + countdown/marcador + estado) | VISITANTE
+// - Scroll vertical DENTRO de la card (no en la pantalla)
 // - Hora integrada dentro de la columna VS
 // - SIN ícono de pronóstico
 // - SIN fecha en el encabezado
-// - Una sola card con tabla de múltiples filas
 // - Actualización de countdown cada minuto
 // - Redirección a partidos.js al hacer clic en cualquier fila
 
@@ -166,7 +166,7 @@ function detenerCountdownAhora() {
     countdownActivo = false;
 }
 
-// ========== RENDERIZAR PRINCIPAL (SIN FECHA) ==========
+// ========== RENDERIZAR PRINCIPAL (CON SCROLL DENTRO DE LA CARD) ==========
 async function renderizarAhora(contenedor, datosCuenta) {
     if (!contenedor) return;
     
@@ -277,12 +277,16 @@ async function renderizarAhora(contenedor, datosCuenta) {
                 border-radius: 20px;
                 overflow: hidden;
                 box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+                display: flex;
+                flex-direction: column;
+                max-height: calc(100vh - 160px);
             }
             .ahora-header {
                 padding: 20px 16px 12px 16px;
                 border-bottom: 1px solid #e5e5ea;
                 background: #ffffff;
                 text-align: center;
+                flex-shrink: 0;
             }
             .ahora-titulo {
                 font-size: 20px;
@@ -300,9 +304,16 @@ async function renderizarAhora(contenedor, datosCuenta) {
                 font-weight: 600;
                 margin-top: 6px;
             }
+            .ahora-tabla-wrapper {
+                overflow-y: auto;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                flex: 1;
+            }
             .ahora-tabla {
                 width: 100%;
                 border-collapse: collapse;
+                min-width: 400px;
             }
             .ahora-tabla th {
                 padding: 12px 8px;
@@ -312,6 +323,10 @@ async function renderizarAhora(contenedor, datosCuenta) {
                 font-weight: 600;
                 font-size: 13px;
                 border-bottom: 1px solid #e5e5ea;
+                position: sticky;
+                top: 0;
+                background: #f9f9fb;
+                z-index: 1;
             }
             .ahora-fila:hover {
                 background: #f2f2f7;
@@ -324,6 +339,7 @@ async function renderizarAhora(contenedor, datosCuenta) {
                 background: #f9f9fb;
                 font-size: 11px;
                 color: #8e8e93;
+                flex-shrink: 0;
             }
             @media (max-width: 600px) {
                 .ahora-tabla th, .ahora-tabla td {
@@ -341,6 +357,9 @@ async function renderizarAhora(contenedor, datosCuenta) {
                 .ahora-tabla td:nth-child(2) {
                     min-width: 110px;
                 }
+                .ahora-tabla-container {
+                    max-height: calc(100vh - 140px);
+                }
             }
         </style>
         
@@ -352,7 +371,7 @@ async function renderizarAhora(contenedor, datosCuenta) {
                 </div>
             </div>
             
-            <div style="overflow-x: auto;">
+            <div class="ahora-tabla-wrapper">
                 <table class="ahora-tabla">
                     <thead>
                         <tr>
