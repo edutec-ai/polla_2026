@@ -2,6 +2,7 @@
 // VERSIÓN TABLA COMPACTA - 3 COLUMNAS
 // Columnas: LOCAL | VS (VS + HORA + countdown/marcador + estado) | VISITANTE
 // - Scroll vertical DENTRO de la card (no en la pantalla)
+// - SIN scroll horizontal
 // - Hora integrada dentro de la columna VS
 // - SIN ícono de pronóstico
 // - SIN fecha en el encabezado
@@ -166,7 +167,7 @@ function detenerCountdownAhora() {
     countdownActivo = false;
 }
 
-// ========== RENDERIZAR PRINCIPAL (CON SCROLL DENTRO DE LA CARD) ==========
+// ========== RENDERIZAR PRINCIPAL (SIN SCROLL HORIZONTAL) ==========
 async function renderizarAhora(contenedor, datosCuenta) {
     if (!contenedor) return;
     
@@ -249,21 +250,25 @@ async function renderizarAhora(contenedor, datosCuenta) {
             `;
         }
         
+        // Ajustar nombres largos para móvil
+        const nombreLocal = p.nom_loc.length > 12 ? p.nom_loc.substring(0, 10) + '...' : p.nom_loc;
+        const nombreVisita = p.nom_vis.length > 12 ? p.nom_vis.substring(0, 10) + '...' : p.nom_vis;
+        
         filasHtml += `
             <tr class="ahora-fila" data-id="${p.id}" style="cursor: pointer; border-bottom: 0.5px solid #f0f0f0;">
-                <td style="padding: 14px 8px; text-align: center; vertical-align: middle;">
-                    <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
-                        <span style="font-size: 40px;">${getBandera(p.nom_loc)}</span>
-                        <span style="font-weight: 600; color: #1c1c1e; font-size: 14px;">${p.nom_loc}</span>
+                <td style="padding: 12px 6px; text-align: center; vertical-align: middle;">
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                        <span style="font-size: 36px;">${getBandera(p.nom_loc)}</span>
+                        <span style="font-weight: 600; color: #1c1c1e; font-size: 12px;">${nombreLocal}</span>
                     </div>
                 </td>
-                <td style="padding: 14px 8px; text-align: center; vertical-align: middle; min-width: 130px;">
+                <td style="padding: 12px 6px; text-align: center; vertical-align: middle;">
                     ${vsContent}
                 </td>
-                <td style="padding: 14px 8px; text-align: center; vertical-align: middle;">
-                    <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
-                        <span style="font-size: 40px;">${getBandera(p.nom_vis)}</span>
-                        <span style="font-weight: 600; color: #1c1c1e; font-size: 14px;">${p.nom_vis}</span>
+                <td style="padding: 12px 6px; text-align: center; vertical-align: middle;">
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                        <span style="font-size: 36px;">${getBandera(p.nom_vis)}</span>
+                        <span style="font-weight: 600; color: #1c1c1e; font-size: 12px;">${nombreVisita}</span>
                     </div>
                 </td>
               </tr>
@@ -282,14 +287,14 @@ async function renderizarAhora(contenedor, datosCuenta) {
                 max-height: calc(100vh - 160px);
             }
             .ahora-header {
-                padding: 20px 16px 12px 16px;
+                padding: 16px 12px 10px 12px;
                 border-bottom: 1px solid #e5e5ea;
                 background: #ffffff;
                 text-align: center;
                 flex-shrink: 0;
             }
             .ahora-titulo {
-                font-size: 20px;
+                font-size: 18px;
                 font-weight: 700;
                 color: #1c1c1e;
                 margin-bottom: 4px;
@@ -298,67 +303,89 @@ async function renderizarAhora(contenedor, datosCuenta) {
                 display: inline-block;
                 background: linear-gradient(135deg, #007aff 0%, #5856d6 100%);
                 color: white;
-                padding: 6px 14px;
+                padding: 4px 12px;
                 border-radius: 20px;
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 600;
-                margin-top: 6px;
+                margin-top: 4px;
             }
             .ahora-tabla-wrapper {
                 overflow-y: auto;
-                overflow-x: auto;
+                overflow-x: hidden;
                 -webkit-overflow-scrolling: touch;
                 flex: 1;
             }
             .ahora-tabla {
                 width: 100%;
                 border-collapse: collapse;
-                min-width: 400px;
+                table-layout: fixed;
             }
             .ahora-tabla th {
-                padding: 12px 8px;
+                padding: 10px 4px;
                 text-align: center;
                 background: #f9f9fb;
                 color: #8e8e93;
                 font-weight: 600;
-                font-size: 13px;
+                font-size: 11px;
                 border-bottom: 1px solid #e5e5ea;
                 position: sticky;
                 top: 0;
-                background: #f9f9fb;
                 z-index: 1;
+            }
+            /* Anchos de columna fijos para evitar desborde */
+            .ahora-tabla th:nth-child(1),
+            .ahora-tabla td:nth-child(1) {
+                width: 30%;
+            }
+            .ahora-tabla th:nth-child(2),
+            .ahora-tabla td:nth-child(2) {
+                width: 40%;
+            }
+            .ahora-tabla th:nth-child(3),
+            .ahora-tabla td:nth-child(3) {
+                width: 30%;
             }
             .ahora-fila:hover {
                 background: #f2f2f7;
                 transition: background 0.2s ease;
             }
             .ahora-footer {
-                padding: 16px;
+                padding: 12px;
                 text-align: center;
                 border-top: 1px solid #e5e5ea;
                 background: #f9f9fb;
-                font-size: 11px;
+                font-size: 10px;
                 color: #8e8e93;
                 flex-shrink: 0;
             }
             @media (max-width: 600px) {
                 .ahora-tabla th, .ahora-tabla td {
-                    padding: 10px 4px;
+                    padding: 8px 3px;
                 }
                 .ahora-tabla td div span:first-child {
-                    font-size: 32px;
+                    font-size: 28px;
                 }
                 .ahora-tabla td div span:nth-child(2) {
-                    font-size: 11px;
-                }
-                .ahora-countdown {
                     font-size: 10px;
                 }
-                .ahora-tabla td:nth-child(2) {
-                    min-width: 110px;
+                .ahora-countdown {
+                    font-size: 9px;
+                }
+                .ahora-header {
+                    padding: 12px 8px 8px 8px;
+                }
+                .ahora-titulo {
+                    font-size: 16px;
+                }
+                .ahora-badge {
+                    font-size: 9px;
+                    padding: 3px 10px;
                 }
                 .ahora-tabla-container {
                     max-height: calc(100vh - 140px);
+                }
+                .vs-content {
+                    font-size: 11px;
                 }
             }
         </style>
