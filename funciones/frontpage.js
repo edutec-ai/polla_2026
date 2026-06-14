@@ -1,6 +1,8 @@
 // funciones/frontpage.js
 // VERSIÓN CORREGIDA - CON TIMESTAMP ANTI-CACHE EN TODOS LOS GET
-// CORREGIDO: Los puntos del encabezado se buscan por NOMBRE (no por ID)
+// CORREGIDO: Los puntos del encabezado ahora muestran el valor real de Velneo (pts)
+// CORREGIDO: Scroll vertical habilitado en móvil para fp-body-zone-contenido
+// CORREGIDO: Opción "TV" agregada al menú de DESKTOP (NO visible en móvil)
 // EXPONE FUNCIÓN GLOBAL PARA CAMBIAR DE VISTA DESDE OTROS MÓDULOS
 
 import { inicializarMenu } from './menu.js';
@@ -12,6 +14,7 @@ import { renderizarPolla } from './polla.js';
 import { renderizarTabla } from './tabla.js';
 import { renderizarAhora, setCambiarVistaCallback as setAhoraCambiarVistaCallback, suscribirAhoraAlSimulador } from './ahora.js';
 import { renderizarReglas, setCambiarVistaCallback as setReglasCallback } from './reglas.js';
+import { renderizarTV } from './tv.js';
 import { 
   guardarPronosticosPartidosLocal, 
   guardarPronosticosEspecialesLocal,
@@ -63,16 +66,15 @@ function cambiarVistaPrincipal(opcion, datosCuenta, tabEspecial = null) {
             case 'la-polla':
                 renderizarPolla(contenidoContainer, datosCuenta);
                 break;
-            case 'simulador':
-                // Simulador ya no se usa, pero se mantiene por compatibilidad
-                contenidoContainer.innerHTML = `<div style="text-align:center;color:white;padding:40px;"><h3>💻 Simulador</h3><p>No disponible después del inicio del mundial</p></div>`;
-                break;
             case 'lab':
                 renderizarLab(contenidoContainer, datosCuenta);
                 break;
             case 'admin':
                 const esAdmin = datosCuenta.usr === 'super' || datosCuenta.name === 'super' || datosCuenta.nombre === 'super';
                 if (esAdmin) renderizarAdmin(contenidoContainer, datosCuenta);
+                break;
+            case 'tv':
+                renderizarTV(contenidoContainer, datosCuenta);
                 break;
             default:
                 renderizarAhora(contenidoContainer, datosCuenta);
@@ -185,46 +187,12 @@ async function cargarDatosIniciales(jugadorId) {
   }
 }
 
-// Función para obtener los puntos reales del usuario por nombre
-async function obtenerPuntosPorNombre(nombreUsuario) {
-  if (!nombreUsuario) return 0;
-  
-  try {
-    const puntosUrl = urlWithTimestamp(`${BASE}/fifa_jug?api_key=${KEY}`);
-    const response = await fetch(puntosUrl);
-    if (!response.ok) return 0;
-    
-    const data = await response.json();
-    const jugadores = data.fifa_jug || [];
-    
-    // Buscar por nombre exacto o por coincidencia
-    const jugador = jugadores.find(j => 
-      j.name === nombreUsuario || 
-      j.name?.toLowerCase() === nombreUsuario.toLowerCase() ||
-      j.nombre === nombreUsuario
-    );
-    
-    if (jugador && jugador.pts !== undefined) {
-      console.log('[Frontpage] Puntos encontrados para', nombreUsuario, ':', jugador.pts);
-      return jugador.pts;
-    }
-    
-    // Si no se encuentra por nombre, buscar por ID en la lista de cuentas
-    console.log('[Frontpage] No se encontraron puntos para', nombreUsuario);
-    return 0;
-  } catch (error) {
-    console.error('[Frontpage] Error obteniendo puntos:', error);
-    return 0;
-  }
-}
-
 export async function cargarFrontpage(datosCuenta) {
   const frontpageCard = document.getElementById('frontpageForm');
   if (!frontpageCard) return;
   
   const esAdmin = datosCuenta.usr === 'super' || datosCuenta.name === 'super' || datosCuenta.nombre === 'super';
   const jugadorId = datosCuenta.id || datosCuenta.ID;
-  const nombreCuenta = datosCuenta.name || datosCuenta.nombre || 'Cuenta';
   
   const contenidoContainer = document.getElementById('fp-body-contenido');
   if (contenidoContainer) {
@@ -242,7 +210,7 @@ export async function cargarFrontpage(datosCuenta) {
     `;
   }
   
-  // Variable para almacenar los puntos reales
+  // Variable para almacenar los puntos reales desde Velneo
   let puntosReales = 0;
   
   if (jugadorId) {
@@ -250,10 +218,17 @@ export async function cargarFrontpage(datosCuenta) {
       await cargarDatosIniciales(jugadorId);
       console.log('[Frontpage] Datos cargados exitosamente, procediendo a renderizar');
       
-      // Obtener puntos reales por NOMBRE (no por ID)
-      puntosReales = await obtenerPuntosPorNombre(nombreCuenta);
-      console.log('[Frontpage] Puntos reales obtenidos:', puntosReales);
-      
+      // Consultar los puntos reales del jugador desde Velneo
+      const puntosUrl = urlWithTimestamp(`${BASE}/fifa_jug?api_key=${KEY}&filter[id]=${jugadorId}`);
+      const responsePuntos = await fetch(puntosUrl);
+      if (responsePuntos.ok) {
+        const dataPuntos = await responsePuntos.json();
+        const jugadorActualizado = dataPuntos.fifa_jug?.[0];
+        if (jugadorActualizado && jugadorActualizado.pts !== undefined) {
+          puntosReales = jugadorActualizado.pts;
+          console.log('[Frontpage] Puntos reales del jugador:', puntosReales);
+        }
+      }
     } catch (error) {
       console.error('[Frontpage] Error cargando datos:', error);
       if (contenidoContainer) {
@@ -288,8 +263,8 @@ export async function cargarFrontpage(datosCuenta) {
   };
   
   const idCuenta = datosCuenta.id || '—';
-  // Usar los puntos reales obtenidos por nombre
-  const puntosCuenta = puntosReales;
+  const nombreCuenta = datosCuenta.name || datosCuenta.nombre || 'Cuenta';
+  const puntosCuenta = puntosReales || datosCuenta.ptr || datosCuenta.pun || 0;
   const usrAsociado = datosCuenta.usr || '—';
   const estadoCuenta = datosCuenta.off ? 'Inactiva' : 'Activa';
   
@@ -375,6 +350,14 @@ export async function cargarFrontpage(datosCuenta) {
         min-height: 0;
       }
       
+      /* Estilos para scroll vertical en el contenedor de contenido */
+      #fp-body-contenido {
+        height: 100%;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+      }
+      
       @media (min-width: 769px) {
         .fp-body-zone-menu { 
           width: 280px;
@@ -393,7 +376,7 @@ export async function cargarFrontpage(datosCuenta) {
           padding: 0px; 
           border: 2px solid #fff; 
           border-radius: 20px; 
-          overflow-y: hidden;
+          overflow-y: auto;
           overflow-x: hidden;
         }
         .mobile-tab-bar {
@@ -414,12 +397,14 @@ export async function cargarFrontpage(datosCuenta) {
           flex: 1;
           min-width: 0;
           min-height: 0;
+          height: 100%;
           background: rgba(0,0,0,0.1); 
           padding: 0px; 
           border: 2px solid #fff; 
           border-radius: 20px; 
-          overflow-y: hidden;
+          overflow-y: auto;
           overflow-x: hidden;
+          -webkit-overflow-scrolling: touch;
         }
         
         .mobile-tab-bar {
@@ -513,7 +498,7 @@ export async function cargarFrontpage(datosCuenta) {
       </div>
       <div class="fp-header-actions">
         ${esAdmin ? `<button class="fp-btn-header" id="btnAdminFrontpage">🔧 Admin</button>` : ''}
-        <button class="fp-btn-header" id="btnRegresarFrontpage">Regresar</button>
+        <button class="fp-btn-header" id="btnRegresarFrontpage">↩️ Regresar</button>
       </div>
     </header>
     
@@ -525,13 +510,14 @@ export async function cargarFrontpage(datosCuenta) {
     </div>
   `;
 
-  // VERSIÓN POST-PARTIDO: TABLA en lugar de SIMULADOR
+  // MENÚ DESKTOP - con opción TV (solo visible en desktop)
   const opcionesMenu = [
     { id: 'ahora', nombre: 'AHORA', color: '#34c759', icono: '🏠' },
     { id: 'partidos', nombre: 'PARTIDOS', color: '#007aff', icono: '⚽' },
     { id: 'especiales', nombre: 'ESPECIALES', color: '#af52de', icono: '⭐' },
     { id: 'tabla', nombre: 'TABLA', color: '#ff9500', icono: '📊' },
-    { id: 'reglas', nombre: 'REGLAS', color: '#5856d6', icono: '📖' }
+    { id: 'reglas', nombre: 'REGLAS', color: '#5856d6', icono: '📖' },
+    { id: 'tv', nombre: 'TV', color: '#e74c3c', icono: '📺' }
   ];
   
   inicializarMenu(datosCuenta, manejarSeleccionMenu, opcionesMenu);
@@ -556,9 +542,9 @@ export async function cargarFrontpage(datosCuenta) {
     }, 400);
   };
   
+  // MENÚ MÓVIL - SIN opción TV (solo visible en móvil)
   const mobileTabBar = document.getElementById('mobile-tab-bar');
   if (mobileTabBar) {
-    // VERSIÓN POST-PARTIDO: TABLA en lugar de SIMULADOR
     const opcionesMovil = [
       { id: 'ahora', icono: '🏠', label: 'AHORA' },
       { id: 'partidos', icono: '⚽', label: 'PARTIDOS' },
