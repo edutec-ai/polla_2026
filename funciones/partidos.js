@@ -1,7 +1,9 @@
 // funciones/partidos.js
 // Módulo de Partidos - La Polla Mundialista 2026
 // CORREGIDO:
-// - Para partidos EN VIVO: usa t90_gol_* como fallback cuando gol_* es undefined
+// - Acepta parámetro tabInicial (todos/grupos/colombia)
+// - Scroll automático al inicio cuando se cambia a GRUPOS
+// - Grupo A activo por defecto al entrar a GRUPOS
 // - NO actualiza cache hasta que Velneo confirme éxito (COD=1)
 // - Lee respuesta de Velneo (COD y DES)
 // - Revertir a valor original si hay error
@@ -181,11 +183,9 @@ function getEstadoPartidoPorEst(partido) {
     };
 }
 
-// ========== FUNCIÓN CORREGIDA: usa t90_gol_* como fallback para partidos EN VIVO ==========
 function getMarcadorEnVivo(partido) {
     const est = Number(partido.est);
     if (est === 2 || est === 3) {
-        // Si gol_loc/gol_vis están undefined, usar t90_gol_* como fallback
         const golLoc = (partido.gol_loc !== undefined && partido.gol_loc !== null) 
             ? partido.gol_loc 
             : (partido.t90_gol_loc || 0);
@@ -336,7 +336,6 @@ function getResultadoReal(partidoId) {
     if (real && real.gol_loc !== null) {
         return { gol_loc: real.gol_loc, gol_vis: real.gol_vis };
     }
-    // Fallback: buscar el partido en partidosCache
     const partido = partidosCache.find(p => p.id === partidoId);
     if (partido && Number(partido.est) === 4) {
         return { 
@@ -347,7 +346,6 @@ function getResultadoReal(partidoId) {
     return null;
 }
 
-// ========== TABLA DE POSICIONES CORREGIDA ==========
 function renderTablaPosiciones(grupo) {
     const equiposGrupo = equiposCache.filter(e => obtenerGrupoPorEquipo(e.name) === grupo);
     const clasificados = gruposSeleccion[grupo] || {};
@@ -388,14 +386,10 @@ function renderTablaPosiciones(grupo) {
                         golesContra = esLocal ? resultado.gol_vis : resultado.gol_loc;
                     }
                 } else if (est === 2 || est === 3) {
-                    // Para partidos en vivo, usar el marcador actual (con fallback a t90)
                     const marcador = getMarcadorEnVivo(p);
                     if (marcador) {
                         golesFavor = esLocal ? marcador.gol_loc : marcador.gol_vis;
                         golesContra = esLocal ? marcador.gol_vis : marcador.gol_loc;
-                    } else {
-                        golesFavor = esLocal ? (p.gol_loc || 0) : (p.gol_vis || 0);
-                        golesContra = esLocal ? (p.gol_vis || 0) : (p.gol_loc || 0);
                     }
                 }
                 
@@ -564,7 +558,6 @@ function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimerDia = 
     if (resultadoReal && estadoEst.estado === 'terminado') {
         centroHTML = `<div style="font-size:20px; font-weight:700; color:#000;">${resultadoReal.gol_loc} - ${resultadoReal.gol_vis}</div>`;
     } else if (estadoEst.estado === 'envivo' && marcadorEnVivo) {
-        // Usar el marcador de getMarcadorEnVivo (que ya tiene fallback a t90_gol_*)
         centroHTML = `
             <div style="font-size:20px; font-weight:700; color:#ff3b30;">${marcadorEnVivo.gol_loc} - ${marcadorEnVivo.gol_vis}</div>
             <div style="font-size:10px; color:#ff9500; margin-top:4px;">🔴 ${marcadorEnVivo.texto}</div>
@@ -743,7 +736,6 @@ async function actualizarMarcadoresEnVivo() {
             if (card) {
                 const centroDiv = card.querySelector('.centro-marcador-envivo');
                 if (centroDiv) {
-                    // Usar fallback a t90_gol_* si es necesario
                     const golLoc = (partido.gol_loc !== undefined && partido.gol_loc !== null) 
                         ? partido.gol_loc 
                         : (partido.t90_gol_loc || 0);
@@ -812,14 +804,12 @@ function scrollAPrimerDestacado() {
     }, 500);
 }
 
-// ========== FUNCIÓN CORREGIDA: GUARDAR PRONÓSTICO CON RESPUESTA DE VELNEO ==========
 async function guardarPronostico(ptdId, s1, s2) {
     if (!currentJugador) { 
         mostrarToast('Inicia sesión primero', 'err'); 
         return; 
     }
     
-    // Guardar el valor ORIGINAL antes de intentar cambiar
     const originalPronostico = pronosticosCache[ptdId];
     
     mostrarToast('💾 Guardando...', 'info');
@@ -841,33 +831,28 @@ async function guardarPronostico(ptdId, s1, s2) {
         console.log('[Partidos] Respuesta de Velneo:', respuesta);
         
         if (respuesta.COD === 1) {
-            // ✅ ÉXITO: Actualizar cache y UI
             pronosticosCache[ptdId] = { s1, s2 };
             actualizarLocalStorage();
             actualizarCardPartido(ptdId, s1, s2);
             mostrarToast('✅ Pronóstico guardado correctamente', 'ok');
             
-            // Limpiar cualquier sincronización pendiente
             tempPronosticos.delete(ptdId);
             if (syncIntervals.has(ptdId)) {
                 clearTimeout(syncIntervals.get(ptdId));
                 syncIntervals.delete(ptdId);
             }
             
-            // Si es el primer partido, redirigir a AHORA
             if (ptdId === 1 && globalCambiarVistaCallback) {
                 setTimeout(() => { 
                     globalCambiarVistaCallback('ahora', currentJugador); 
                 }, 1500);
             }
         } else {
-            // ❌ ERROR: Revertir a valor original
             if (originalPronostico) {
                 pronosticosCache[ptdId] = originalPronostico;
                 actualizarCardPartido(ptdId, originalPronostico.s1, originalPronostico.s2);
                 mostrarToast(`❌ ${respuesta.DES || 'Error al guardar el pronóstico'}`, 'err');
             } else {
-                // Si no había pronóstico original, mostrar mensaje de error
                 mostrarToast(`❌ ${respuesta.DES || 'No se pudo guardar el pronóstico'}`, 'err');
             }
         }
@@ -875,7 +860,6 @@ async function guardarPronostico(ptdId, s1, s2) {
     } catch (error) { 
         console.error('Error al guardar:', error);
         
-        // ❌ ERROR DE RED: Revertir a valor original si existe
         if (originalPronostico) {
             pronosticosCache[ptdId] = originalPronostico;
             actualizarCardPartido(ptdId, originalPronostico.s1, originalPronostico.s2);
@@ -1095,6 +1079,10 @@ async function refrescarContenido() {
             const esPrimerDia = (fechaPartido === primerDia);
             return renderPartidoCard(p, fechaSim, horaSim, tipo, esPrimerDia);
         }).join('')}</div></div>`;
+        
+        // Scroll al primer destacado (hoy o próximo)
+        scrollAPrimerDestacado();
+        
     } else if (tabActivo === 'grupos') {
         const partidosGrupo = partidosVisibles.filter(p => p.grupoCalculado === grupoActivo);
         const botonesGrupos = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'].map(g => {
@@ -1111,7 +1099,21 @@ async function refrescarContenido() {
                 return renderPartidoCard(p, fechaSim, horaSim, tipo, esPrimerDia);
             }).join('') : '<div style="text-align:center;padding:40px;color:#8e8e93;">No hay partidos programados para este grupo</div>'}</div>
         </div>`;
-        document.querySelectorAll('.grupo-tab').forEach(btn => { btn.onclick = () => { grupoActivo = btn.dataset.grupo; refrescarContenido(); }; });
+        
+        // FORZAR SCROLL HACIA ARRIBA al entrar a GRUPOS
+        setTimeout(() => {
+            if (contenedorScroll) {
+                contenedorScroll.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }, 100);
+        
+        document.querySelectorAll('.grupo-tab').forEach(btn => { 
+            btn.onclick = () => { 
+                grupoActivo = btn.dataset.grupo; 
+                refrescarContenido(); 
+            }; 
+        });
+        
     } else if (tabActivo === 'colombia') {
         const partidosColombia = partidosVisibles.filter(p => (p.nom_loc === 'Colombia' || p.nom_vis === 'Colombia'));
         contenedorScroll.innerHTML = `<div style="padding:16px;">
@@ -1123,6 +1125,13 @@ async function refrescarContenido() {
                 return renderPartidoCard(p, fechaSim, horaSim, tipo, esPrimerDia);
             }).join('') : '<div style="text-align:center;padding:40px;color:#8e8e93;">No hay partidos programados para Colombia</div>'}</div>
         </div>`;
+        
+        // Scroll arriba en Colombia también
+        setTimeout(() => {
+            if (contenedorScroll) {
+                contenedorScroll.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }, 100);
     }
     
     document.querySelectorAll('.partido-card').forEach(card => {
@@ -1130,9 +1139,6 @@ async function refrescarContenido() {
         const partido = partidosCache.find(p => p.id === id);
         if (partido) { card.onclick = () => abrirModal(partido, fechaSim, horaSim); }
     });
-    
-    scrollAPrimerDestacado();
-    if (document.querySelectorAll('.partido-countdown').length > 0 && !countdownActivo) { iniciarCountdown(); }
 }
 
 function cambiarTab(tab) { 
@@ -1144,7 +1150,7 @@ function cambiarTab(tab) {
     refrescarContenido(); 
 }
 
-export async function renderizarPartidos(contenedor, datosCuenta) {
+export async function renderizarPartidos(contenedor, datosCuenta, tabInicial = 'todos') {
     if (!contenedor) return;
     currentJugador = datosCuenta;
     detenerCountdown();
@@ -1167,16 +1173,26 @@ export async function renderizarPartidos(contenedor, datosCuenta) {
         onSimuladorCambio(() => refrescarContenido()); 
     }
     
+    // Restablecer grupoActivo a 'A' al entrar a GRUPOS
+    if (tabInicial === 'grupos') {
+        grupoActivo = 'A';
+    }
+    
     contenedor.innerHTML = `<div style="width:100%;height:100%;display:flex;flex-direction:column;background:#fff;border-radius:16px;overflow:hidden;">
         <div style="flex-shrink:0;display:flex;gap:8px;padding:12px 16px;background:#fff;border-bottom:1px solid #e5e5ea;">
-            <button class="partidos-tab active" data-tab="todos" style="flex:1;padding:10px;border:none;border-radius:12px;background:#007aff;color:#fff;cursor:pointer;">📋 TODOS</button>
-            <button class="partidos-tab" data-tab="grupos" style="flex:1;padding:10px;border:none;border-radius:12px;background:#f2f2f7;color:#3c3c43;cursor:pointer;">📊 GRUPOS</button>
-            <button class="partidos-tab" data-tab="colombia" style="flex:1;padding:10px;border:none;border-radius:12px;background:#f2f2f7;color:#3c3c43;cursor:pointer;">🇨🇴 COLOMBIA</button>
+            <button class="partidos-tab ${tabInicial === 'todos' ? 'active' : ''}" data-tab="todos" style="flex:1;padding:10px;border:none;border-radius:12px;background:${tabInicial === 'todos' ? '#007aff' : '#f2f2f7'};color:${tabInicial === 'todos' ? '#fff' : '#3c3c43'};cursor:pointer;">📋 TODOS</button>
+            <button class="partidos-tab ${tabInicial === 'grupos' ? 'active' : ''}" data-tab="grupos" style="flex:1;padding:10px;border:none;border-radius:12px;background:${tabInicial === 'grupos' ? '#007aff' : '#f2f2f7'};color:${tabInicial === 'grupos' ? '#fff' : '#3c3c43'};cursor:pointer;">📊 GRUPOS</button>
+            <button class="partidos-tab ${tabInicial === 'colombia' ? 'active' : ''}" data-tab="colombia" style="flex:1;padding:10px;border:none;border-radius:12px;background:${tabInicial === 'colombia' ? '#007aff' : '#f2f2f7'};color:${tabInicial === 'colombia' ? '#fff' : '#3c3c43'};cursor:pointer;">🇨🇴 COLOMBIA</button>
         </div>
         <div id="partidos-contenido-scroll" style="flex:1;overflow-y:auto;"></div>
     </div>`;
     
-    document.querySelectorAll('.partidos-tab').forEach(tab => { tab.onclick = () => cambiarTab(tab.dataset.tab); });
+    document.querySelectorAll('.partidos-tab').forEach(tab => { 
+        tab.onclick = () => cambiarTab(tab.dataset.tab); 
+    });
+    
+    // Establecer tabActivo según tabInicial
+    tabActivo = tabInicial;
     refrescarContenido();
     
     iniciarActualizacionEnVivo();
