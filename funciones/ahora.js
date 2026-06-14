@@ -4,11 +4,9 @@
 // - Scroll vertical DENTRO de la card
 // - SIN scroll horizontal
 // - Hora integrada dentro de la columna VS
-// - SIN ícono de pronóstico
-// - SIN fecha en el encabezado
+// - CORREGIDO: Al hacer clic, redirige a partidos.js con tab='todos'
 // - CORREGIDO: Usa t90_gol_* como fallback para partidos EN VIVO
 // - Actualización de countdown cada minuto
-// - Redirección a partidos.js al hacer clic en cualquier fila
 
 import { cargarPartidos, getBandera, formatearHora12h } from './partidos.js';
 
@@ -92,7 +90,7 @@ function calcularCountdown(fechaPartido, horaPartido) {
     return `Faltan ${horas}h ${minutos}m`;
 }
 
-// ========== OBTENER ESTADO DEL PARTIDO (CORREGIDO CON FALLBACK) ==========
+// ========== OBTENER ESTADO DEL PARTIDO (CON FALLBACK) ==========
 function getEstadoPartido(partido) {
     const est = Number(partido.est);
     
@@ -109,7 +107,6 @@ function getEstadoPartido(partido) {
         };
     }
     if (est === 2 || est === 3) {
-        // FALLBACK: si gol_loc/gol_vis son undefined, usar t90_gol_*
         const golLoc = (partido.gol_loc !== undefined && partido.gol_loc !== null) 
             ? partido.gol_loc 
             : (partido.t90_gol_loc || 0);
@@ -180,7 +177,6 @@ async function renderizarAhora(contenedor, datosCuenta) {
     currentJugador = datosCuenta;
     detenerCountdownAhora();
     
-    // Cargar pronósticos del usuario (para lógica interna)
     if (currentJugador) {
         try {
             const BASE_V2 = 'https://server.sion.hysintegrar.com/fifa2026/vERP_2_dat_dat/v2';
@@ -199,7 +195,6 @@ async function renderizarAhora(contenedor, datosCuenta) {
     let partidos = await cargarPartidos();
     const partidosHoy = obtenerPartidosDeHoy(partidos);
     
-    // Ordenar por hora
     partidosHoy.sort((a, b) => (a.hor || '00:00:00').localeCompare(b.hor || '00:00:00'));
     
     if (partidosHoy.length === 0) {
@@ -212,14 +207,12 @@ async function renderizarAhora(contenedor, datosCuenta) {
         return;
     }
     
-    // Generar filas de la tabla
     let filasHtml = '';
     for (const p of partidosHoy) {
         const estado = getEstadoPartido(p);
         const countdown = calcularCountdown(p.fch?.split('T')[0], p.hor);
         const horaFormateada = formatearHora12h(p.hor);
         
-        // Construir contenido de la columna VS (integrada)
         let vsContent = '';
         
         if (estado.tipo === 'terminado') {
@@ -256,7 +249,6 @@ async function renderizarAhora(contenedor, datosCuenta) {
             `;
         }
         
-        // Ajustar nombres largos para móvil
         const nombreLocal = p.nom_loc.length > 12 ? p.nom_loc.substring(0, 10) + '...' : p.nom_loc;
         const nombreVisita = p.nom_vis.length > 12 ? p.nom_vis.substring(0, 10) + '...' : p.nom_vis;
         
@@ -421,25 +413,20 @@ async function renderizarAhora(contenedor, datosCuenta) {
         </div>
     `;
     
-    // Eventos de clic en las filas
+    // ========== CORREGIDO: Redirige a partidos con tab='todos' ==========
     document.querySelectorAll('.ahora-fila').forEach(fila => {
         fila.onclick = () => {
             if (globalCambiarVistaCallback) {
-                globalCambiarVistaCallback('partidos', currentJugador);
-                setTimeout(() => {
-                    const tabTodos = document.querySelector('.partidos-tab[data-tab="todos"]');
-                    if (tabTodos) tabTodos.click();
-                }, 300);
+                // Llamar a partidos con tabInicial = 'todos'
+                globalCambiarVistaCallback('partidos', currentJugador, null, 'todos');
             }
         };
     });
     
-    // Iniciar countdowns si hay partidos pendientes
     if (document.querySelectorAll('.ahora-countdown').length > 0) {
         iniciarCountdownAhora();
     }
     
-    // Manejar visibilidad de la página
     const visibilityHandler = () => {
         if (document.hidden) {
             detenerCountdownAhora();
