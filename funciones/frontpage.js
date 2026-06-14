@@ -3,6 +3,7 @@
 // CORREGIDO: Los puntos del encabezado ahora muestran el valor real de Velneo (pts)
 // CORREGIDO: Scroll vertical habilitado en móvil para fp-body-zone-contenido
 // CORREGIDO: Opción "TV" agregada al menú de DESKTOP (NO visible en móvil)
+// CORREGIDO: Al llamar a partidos, se puede especificar pestaña inicial (todos/grupos/colombia)
 // EXPONE FUNCIÓN GLOBAL PARA CAMBIAR DE VISTA DESDE OTROS MÓDULOS
 
 import { inicializarMenu } from './menu.js';
@@ -37,7 +38,7 @@ function urlWithTimestamp(url) {
 }
 
 // Función para cambiar la vista principal (expuesta globalmente)
-function cambiarVistaPrincipal(opcion, datosCuenta, tabEspecial = null) {
+function cambiarVistaPrincipal(opcion, datosCuenta, tabEspecial = null, tabPartidos = null) {
     const contenidoContainer = document.getElementById('fp-body-contenido');
     if (!contenidoContainer) return;
     
@@ -48,7 +49,8 @@ function cambiarVistaPrincipal(opcion, datosCuenta, tabEspecial = null) {
                 renderizarAhora(contenidoContainer, datosCuenta);
                 break;
             case 'partidos':
-                renderizarPartidos(contenidoContainer, datosCuenta);
+                // Pasar la pestaña inicial si viene especificada
+                renderizarPartidos(contenidoContainer, datosCuenta, tabPartidos || 'todos');
                 break;
             case 'especiales':
                 if (tabEspecial) {
@@ -247,8 +249,9 @@ export async function cargarFrontpage(datosCuenta) {
   
   onSimuladorCambio((fecha, hora) => console.log('📅 Simulador actualizado:', fecha, hora));
   
-  // Exponer función global para cambiar de vista
-  globalCambiarVista = (opcion, cuenta, tabEspecial = null) => cambiarVistaPrincipal(opcion, cuenta, tabEspecial);
+  // Exponer función global para cambiar de vista (con soporte para tabPartidos)
+  globalCambiarVista = (opcion, cuenta, tabEspecial = null, tabPartidos = null) => 
+    cambiarVistaPrincipal(opcion, cuenta, tabEspecial, tabPartidos);
   
   // Registrar callbacks para otros módulos
   setAhoraCambiarVistaCallback(globalCambiarVista);
