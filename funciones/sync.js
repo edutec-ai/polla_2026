@@ -1,6 +1,7 @@
 // funciones/sync.js
 // Módulo de sincronización con localStorage y Velneo
 // VERSIÓN CON VERSIONADO Y TIMESTAMPS - CORREGIDO
+// AHORA GUARDA 'pul' (PULSO) EN LOS PRONÓSTICOS DE PARTIDOS
 
 const STORAGE_KEYS = {
   PARTIDOS: 'polla_pronosticos_partidos',
@@ -13,9 +14,9 @@ const STORAGE_KEYS = {
   VERSION: 'polla_data_version'
 };
 
-const DATA_VERSION = '2.0.0';
+const DATA_VERSION = '2.1.0'; // Versión actualizada para incluir pul
 
-// Guardar pronósticos de partidos en localStorage (con versionado)
+// Guardar pronósticos de partidos en localStorage (con versionado y pul)
 export function guardarPronosticosPartidosLocal(pronosticos) {
   const dataToSave = {
     version: DATA_VERSION,
@@ -23,6 +24,7 @@ export function guardarPronosticosPartidosLocal(pronosticos) {
     data: pronosticos
   };
   localStorage.setItem(STORAGE_KEYS.PARTIDOS, JSON.stringify(dataToSave));
+  console.log('[Sync] Pronósticos partidos guardados con versión', DATA_VERSION);
 }
 
 // Cargar pronósticos de partidos desde localStorage
@@ -33,6 +35,11 @@ export function cargarPronosticosPartidosLocal() {
   try {
     const parsed = JSON.parse(rawData);
     if (parsed.version && parsed.data) {
+      // Verificar si la versión es compatible
+      if (parsed.version !== DATA_VERSION) {
+        console.log('[Sync] Versión desactualizada. Se recargará desde API.');
+        return {};
+      }
       return parsed.data;
     }
     return parsed;
