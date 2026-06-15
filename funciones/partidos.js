@@ -9,6 +9,7 @@
 // - ✅ NUEVO: Bloquea completamente en 2do tiempo (est=3) y terminado (est=4)
 // - ✅ NUEVO: Valores vacíos (placeholder "-") cuando pul=0 (nunca ha pronosticado)
 // - ✅ NUEVO: Mensajes de toast en dos líneas con <br>
+// - ✅ NUEVO: Badge de advertencia para 0-0
 // - Acepta parámetro tabInicial (todos/grupos/colombia)
 // - Scroll automático al inicio cuando se cambia a GRUPOS
 // - Grupo A activo por defecto al entrar a GRUPOS
@@ -69,7 +70,7 @@ let globalCambiarVistaCallback = null;
 function mostrarToast(msg, tipo) {
     const toast = document.getElementById('app-toast');
     if (toast) { 
-        toast.innerHTML = msg;  // ← AHORA ACEPTA HTML (para <br>)
+        toast.innerHTML = msg;
         toast.className = 'toast ' + (tipo || ''); 
         toast.classList.add('show'); 
         setTimeout(() => toast.classList.remove('show'), 4000); 
@@ -168,7 +169,6 @@ async function cargarEquipos() {
     }
 }
 
-// ========== FUNCIÓN CORREGIDA: Diferencia entre 1er tiempo y 2do tiempo ==========
 function getEstadoPartidoPorEst(partido) {
     const est = Number(partido.est);
     
@@ -183,19 +183,17 @@ function getEstadoPartidoPorEst(partido) {
         };
     }
     
-    // 1er tiempo - puede apostar SOLO si no tiene pronóstico
     if (est === 2) {
         return { 
             estado: 'primer_tiempo', 
             texto: 'EN VIVO (1T)',
             icono: '🟡',
-            editable: true,  // Permitir evaluar después (validar si tiene pronóstico)
+            editable: true,
             visible: true,
             puntosBase: 0
         };
     }
     
-    // 2do tiempo - NADIE puede apostar
     if (est === 3) {
         return { 
             estado: 'segundo_tiempo', 
@@ -207,7 +205,6 @@ function getEstadoPartidoPorEst(partido) {
         };
     }
     
-    // Partido pendiente (est=1)
     return { 
         estado: 'pendiente', 
         texto: '',
@@ -920,7 +917,6 @@ function scrollAPrimerDestacado() {
     }, 500);
 }
 
-// ========== FUNCIÓN GUARDAR PRONÓSTICO CORREGIDA (con parámetro pul) ==========
 async function guardarPronostico(ptdId, s1, s2, pul = '1') {
     if (!currentJugador) { 
         mostrarToast('Inicia sesión primero', 'err'); 
@@ -1008,7 +1004,6 @@ function validarInputNumerico(input) {
     });
 }
 
-// ========== FUNCIÓN ABRIR MODAL CORREGIDA (validación PULSO 50 + valores vacíos) ==========
 function abrirModal(partido, fechaSim, horaSim) {
     const estadoEst = getEstadoPartidoPorEst(partido);
     let pronostico = pronosticosCache[partido.id] || { s1: 0, s2: 0, pul: '0' };
@@ -1020,7 +1015,6 @@ function abrirModal(partido, fechaSim, horaSim) {
     
     // ========== VALIDACIONES DE APUESTA ==========
     
-    // CASO 1: Partido terminado (est=4) → Solo ver detalles, no apostar
     if (estadoEst.estado === 'terminado') {
         const resultadoReal = getResultadoReal(partido.id);
         if (!resultadoReal) { mostrarToast('Partido finalizado sin resultados disponibles', 'err'); return; }
@@ -1093,13 +1087,11 @@ function abrirModal(partido, fechaSim, horaSim) {
         return;
     }
     
-    // CASO 2: 2do tiempo (est=3) → No se puede apostar
     if (estadoEst.estado === 'segundo_tiempo') {
         mostrarToast('🔒 Partido en 2do tiempo.<br>No se aceptan más pronósticos.', 'err');
         return;
     }
     
-    // CASO 3: 1er tiempo (est=2) → Solo puede apostar si NO tiene pronóstico
     if (estadoEst.estado === 'primer_tiempo') {
         const yaTienePronostico = pronosticosCache[partido.id] !== undefined && pronosticosCache[partido.id].pul !== '0';
         
@@ -1108,17 +1100,14 @@ function abrirModal(partido, fechaSim, horaSim) {
             return;
         }
         
-        // ✅ Puede apostar con PULSO 50
         console.log('[Partidos] Usuario sin pronóstico, puede apostar en 1er tiempo con PULSO 50');
     }
     
-    // CASO 4: Partido pendiente (est=1) → Puede apostar con PULSO 100
     if (estadoEst.estado !== 'pendiente' && estadoEst.estado !== 'primer_tiempo') {
         mostrarToast('🔒 Este partido no está disponible para pronósticos', 'err');
         return;
     }
     
-    // Determinar el pulso que se enviará al guardar
     const pulsoAEnviar = (estadoEst.estado === 'primer_tiempo') ? '2' : '1';
     const puntosBaseParaModal = (estadoEst.estado === 'primer_tiempo') ? Math.round(ptsBase * 0.5) : ptsBase;
     
@@ -1132,7 +1121,6 @@ function abrirModal(partido, fechaSim, horaSim) {
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:3000;display:flex;align-items:flex-end;justify-content:center;';
     
-    // Mostrar valores vacíos si pul=0 (nunca ha pronosticado)
     const mostrarValorVacio = (pronostico.pul === '0');
     const valorS1 = mostrarValorVacio ? '' : pronostico.s1;
     const valorS2 = mostrarValorVacio ? '' : pronostico.s2;
@@ -1172,6 +1160,14 @@ function abrirModal(partido, fechaSim, horaSim) {
                     <input id="modal-s2" type="text" inputmode="numeric" pattern="[0-9]*" value="${valorS2}" placeholder="-" style="width:44px;height:36px;text-align:center;font-size:17px;font-weight:700;border:1px solid #e5e5ea;border-radius:10px; background:#fff;">
                     <button id="modal-inc-vis" style="width:36px;height:36px;border-radius:18px;background:#fff;border:1px solid #e5e5ea;font-size:18px;font-weight:700;cursor:pointer; display:flex; align-items:center; justify-content:center;">+</button>
                 </div>
+            </div>
+        </div>
+        
+        <!-- ========== BADGE DE ADVERTENCIA 0-0 ========== -->
+        <div style="text-align: center; margin-bottom: 16px;">
+            <div style="background:rgb(17, 55, 95); color: white; font-size: 12px; font-weight: 500; padding: 6px 14px; border-radius: 20px; display: inline-block; line-height: 1.4;">
+                ⚠️ Si tu pronóstico es 0-0<br>
+                <span style="color: #ffd60a;">selecciona explícitamente 0 - 0</span>
             </div>
         </div>
         
@@ -1417,5 +1413,4 @@ export async function renderizarPartidos(contenedor, datosCuenta, tabInicial = '
     });
 }
 
-// Exportar funciones necesarias para ahora.js
 export { cargarPartidos, getBandera, formatearHora12h };
