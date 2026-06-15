@@ -369,7 +369,7 @@ export async function generarPDF(datosCuenta) {
     `;
     modalHeader.innerHTML = `
         <div>
-            <div style="font-size: 16px; font-weight: 700;">📄 Informe de Auditoría</div>
+            <div style="font-size: 16px; font-weight: 700;">📄 Informe de Pronósticos</div>
             <div style="font-size: 11px; opacity: 0.8;">Polla Mundialista 2026</div>
         </div>
         <div style="display: flex; gap: 12px;">
@@ -397,7 +397,9 @@ export async function generarPDF(datosCuenta) {
                 height: 32px;
                 border-radius: 16px;
                 transition: all 0.2s;
-            " onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='none'">✕</button>
+                " onmouseover="this.style.background='rgba(255,255,255,0.2)'" 
+                onmouseout="this.style.background='none'">🅧
+            </button>
         </div>
     `;
     
