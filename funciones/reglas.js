@@ -174,7 +174,7 @@ function generarHTMLPDF(datosCuenta, puntosReales) {
             puntosDetalle = calcularPuntosDetalle(pronostico, resultadoReal, p.fas, pulso);
         }
         
-        const resultadoRealText = resultadoReal ? `${resultadoReal.gol_loc} - ${resultadoReal.gol_vis}` : 'PENDIENTE';
+        const resultadoRealText = resultadoReal ? `${resultadoReal.gol_loc} - ${resultadoReal.gol_vis}` : '-';
         const pronosticoText = pronostico ? `${pronostico.s1} - ${pronostico.s2}` : '—';
         
         partidosHTML += `
