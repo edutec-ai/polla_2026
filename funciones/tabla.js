@@ -1,9 +1,9 @@
 // funciones/tabla.js
-// Módulo de Tabla de Posiciones - TOP 50 por puntaje acumulado (pts)
+// Módulo de Tabla de Posiciones - Listado COMPLETO (sin límite TOP 50)
 // EXCLUYE usuarios de prueba: 'super', 'mundial'
 // EXCLUYE usuarios con 0 puntos
 // ORGANIZADORES al final del grupo de puntos
-// SIN emojis/medallas - solo texto plano
+// Título actualizado: "Tabla de Posiciones Dinámica" + "Esta tabla se actualiza con el resultado en vivo"
 
 const BASE = 'https://server.sion.hysintegrar.com/fifa2026/vERP_2_dat_dat/v1';
 const KEY = 'SuzvTp4qwXQtAVFJbdzP';
@@ -73,7 +73,7 @@ export async function renderizarTabla(contenedor, datosCuenta) {
             if (j.off === true) return false;
             if (esUsuarioExcluido(j.name)) return false;
             if (!j.name || j.name.trim() === '') return false;
-            if ((j.pts || 0) === 0) return false; // EXCLUIR usuarios con 0 puntos
+            if ((j.pts || 0) === 0) return false;
             return true;
         });
         
@@ -99,10 +99,10 @@ export async function renderizarTabla(contenedor, datosCuenta) {
             return (a.name || '').localeCompare(b.name || '');
         });
         
-        // TOP 50 (sin incluir los de 0 puntos)
-        const top50 = jugadoresActivos.slice(0, 50);
+        // ✅ CAMBIO 1: Mostrar TODOS los jugadores (sin límite de 50)
+        const todosLosJugadores = jugadoresActivos;
         
-        if (top50.length === 0) {
+        if (todosLosJugadores.length === 0) {
             contenedor.innerHTML = `
                 <div style="text-align: center; padding: 40px; color: rgba(255,255,255,0.7);">
                     <div style="font-size: 48px; margin-bottom: 16px;">📊</div>
@@ -113,11 +113,12 @@ export async function renderizarTabla(contenedor, datosCuenta) {
             return;
         }
         
+        // ✅ CAMBIO 2: Nuevo título y subtítulo
         let html = `
             <div style="padding: 16px; height: 100%; overflow-y: auto;">
                 <div style="background: rgba(0,0,0,0.2); border-radius: 20px; padding: 12px 16px; margin-bottom: 16px;">
-                    <div style="font-size: 18px; font-weight: 700; color: white;">Tabla de Posiciones</div>
-                    <div style="font-size: 11px; color: rgba(255,255,255,0.5);">TOP 50 · Puntaje acumulado</div>
+                    <div style="font-size: 18px; font-weight: 700; color: white;">🏆 Tabla de Posiciones Dinámica</div>
+                    <div style="font-size: 11px; color: rgba(255,255,255,0.5);">Esta tabla se actualiza con el resultado en vivo</div>
                 </div>
                 
                 <div style="background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); border-radius: 20px; overflow: hidden; overflow-x: auto;">
@@ -132,7 +133,7 @@ export async function renderizarTabla(contenedor, datosCuenta) {
                         <tbody>
         `;
         
-        top50.forEach((jugador, index) => {
+        todosLosJugadores.forEach((jugador, index) => {
             const posicion = index + 1;
             let bgColor = '';
             
@@ -166,7 +167,7 @@ export async function renderizarTabla(contenedor, datosCuenta) {
                 </div>
                 
                 <div style="margin-top: 12px; text-align: center; font-size: 9px; color: rgba(255,255,255,0.3);">
-                    TOP 50 · Solo participantes con puntaje · Actualizado en tiempo real
+                    Total de participantes: ${todosLosJugadores.length} · Actualizado en tiempo real
                 </div>
             </div>
         `;
