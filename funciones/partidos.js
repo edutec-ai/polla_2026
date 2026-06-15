@@ -1,6 +1,10 @@
 // funciones/partidos.js
 // Módulo de Partidos - La Polla Mundialista 2026
 // CORREGIDO:
+// - ✅ Implementado sistema de PULSO (multiplicador de puntos según campo 'pul' de Velneo)
+// - ✅ Para partidos TERMINADOS, ignora cache local y siempre consulta API fresca
+// - ✅ Forzar actualización de 'pul' cuando el partido está en est=4
+// - ✅ CORREGIDO: Promise.all para evitar [object Promise]
 // - Acepta parámetro tabInicial (todos/grupos/colombia)
 // - Scroll automático al inicio cuando se cambia a GRUPOS
 // - Grupo A activo por defecto al entrar a GRUPOS
@@ -18,6 +22,13 @@ import { cargarPronosticosPartidosLocal, guardarPronosticosPartidosLocal, cargar
 const BASE = 'https://server.sion.hysintegrar.com/fifa2026/vERP_2_dat_dat/v1';
 const BASE_V2 = 'https://server.sion.hysintegrar.com/fifa2026/vERP_2_dat_dat/v2';
 const KEY = 'SuzvTp4qwXQtAVFJbdzP';
+
+// Mapeo de multiplicadores de PULSO según la tabla FIFA_PUL
+function getMultiplicadorPulso(pul) {
+    if (pul === '1') return 1;      // PULSO 100 → 100% de puntos
+    if (pul === '2') return 0.5;    // PULSO 50 → 50% de puntos
+    return 0;                        // PULSO 0 → 0% de puntos
+}
 
 // ========== MAPEO HARCODEADO DE GRUPOS ==========
 const GRUPOS_POR_EQUIPO = {
@@ -207,15 +218,40 @@ async function obtenerPronosticoActual(ptdId) {
     if (!currentJugador) return null;
     try {
         const timestamp = Date.now();
-        const response = await fetch(`${BASE_V2}/fifa_jug_pro?api_key=${KEY}&filter[id]=${currentJugador.id}&fields=jug,jug.name,id,ptd,pro_gol_loc,pro_gol_vis,pro_res&_=${timestamp}`);
+        const response = await fetch(`${BASE_V2}/fifa_jug_pro?api_key=${KEY}&filter[id]=${currentJugador.id}&fields=jug,jug.name,id,ptd,pro_gol_loc,pro_gol_vis,pro_res,pul&_=${timestamp}`);
         const data = await response.json();
         const pronostico = data.fifa_jug_pro?.find(p => p.ptd === ptdId);
         if (pronostico) {
-            return { s1: pronostico.pro_gol_loc || 0, s2: pronostico.pro_gol_vis || 0 };
+            return { 
+                s1: pronostico.pro_gol_loc || 0, 
+                s2: pronostico.pro_gol_vis || 0,
+                pul: pronostico.pul || '0'
+            };
         }
         return null;
     } catch (error) {
         console.error('[Partidos] Error obteniendo pronóstico actual:', error);
+        return null;
+    }
+}
+
+async function obtenerPronosticoFresco(ptdId) {
+    if (!currentJugador) return null;
+    try {
+        const timestamp = Date.now();
+        const response = await fetch(`${BASE_V2}/fifa_jug_pro?api_key=${KEY}&filter[id]=${currentJugador.id}&fields=jug,jug.name,id,ptd,pro_gol_loc,pro_gol_vis,pro_res,pul&_=${timestamp}`);
+        const data = await response.json();
+        const pronostico = data.fifa_jug_pro?.find(p => p.ptd === ptdId);
+        if (pronostico) {
+            return { 
+                s1: pronostico.pro_gol_loc || 0, 
+                s2: pronostico.pro_gol_vis || 0,
+                pul: pronostico.pul || '0'
+            };
+        }
+        return null;
+    } catch (error) {
+        console.error('[Partidos] Error obteniendo pronóstico fresco:', error);
         return null;
     }
 }
@@ -225,7 +261,7 @@ async function sincronizarConVelneo(ptdId) {
     try {
         const valorActual = await obtenerPronosticoActual(ptdId);
         if (valorActual) {
-            pronosticosCache[ptdId] = valorActual;
+            pronosticosCache[ptdId] = { s1: valorActual.s1, s2: valorActual.s2, pul: valorActual.pul };
             guardarPronosticosPartidosLocal(pronosticosCache);
             const temp = tempPronosticos.get(ptdId);
             if (temp && (temp.s1 !== valorActual.s1 || temp.s2 !== valorActual.s2)) {
@@ -274,6 +310,7 @@ function actualizarCardPartido(ptdId, s1, s2) {
 
 async function cargarPronosticos(jugId, forceRefresh = false) {
     if (!jugId) return;
+    
     if (!forceRefresh) {
         const locales = cargarPronosticosPartidosLocal();
         if (locales && Object.keys(locales).length > 0) { 
@@ -282,17 +319,40 @@ async function cargarPronosticos(jugId, forceRefresh = false) {
             return; 
         }
     }
+    
     try {
         const timestamp = Date.now();
-        const response = await fetch(`${BASE_V2}/fifa_jug_pro?api_key=${KEY}&filter[id]=${jugId}&fields=jug,jug.name,id,ptd,pro_gol_loc,pro_gol_vis,pro_res&_=${timestamp}`);
+        const response = await fetch(`${BASE_V2}/fifa_jug_pro?api_key=${KEY}&filter[id]=${jugId}&fields=jug,jug.name,id,ptd,pro_gol_loc,pro_gol_vis,pro_res,pul&_=${timestamp}`);
         const pronosticos = (await response.json()).fifa_jug_pro || [];
         pronosticosCache = {};
-        pronosticos.forEach(p => { pronosticosCache[p.ptd] = { s1: p.pro_gol_loc || 0, s2: p.pro_gol_vis || 0 }; });
+        pronosticos.forEach(p => { 
+            pronosticosCache[p.ptd] = { 
+                s1: p.pro_gol_loc || 0, 
+                s2: p.pro_gol_vis || 0,
+                pul: p.pul || '0'
+            }; 
+        });
         guardarPronosticosPartidosLocal(pronosticosCache);
-        console.log(`[Partidos] ✅ ${Object.keys(pronosticosCache).length} pronósticos desde API`);
+        console.log(`[Partidos] ✅ ${Object.keys(pronosticosCache).length} pronósticos desde API (con PULSO)`);
     } catch (error) { 
         console.error('Error cargando pronósticos:', error); 
     }
+}
+
+async function refrescarPronosticoSiTerminado(ptdId, est) {
+    if (est === 4 && currentJugador) {
+        const pronosticoFresco = await obtenerPronosticoFresco(ptdId);
+        if (pronosticoFresco) {
+            const actual = pronosticosCache[ptdId];
+            if (!actual || actual.s1 !== pronosticoFresco.s1 || actual.s2 !== pronosticoFresco.s2 || actual.pul !== pronosticoFresco.pul) {
+                console.log(`[Partidos] Actualizando pronóstico fresco para partido terminado ${ptdId}: pul=${pronosticoFresco.pul}`);
+                pronosticosCache[ptdId] = { s1: pronosticoFresco.s1, s2: pronosticoFresco.s2, pul: pronosticoFresco.pul };
+                guardarPronosticosPartidosLocal(pronosticosCache);
+                return pronosticoFresco;
+            }
+        }
+    }
+    return pronosticosCache[ptdId];
 }
 
 function actualizarLocalStorage() { 
@@ -518,10 +578,17 @@ function renderTablaPosiciones(grupo) {
     return html;
 }
 
-function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimerDia = false) {
+async function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimerDia = false) {
     const estadoEst = getEstadoPartidoPorEst(partido);
     const esFuturo = (estadoEst.estado === 'pendiente');
-    let pronostico = pronosticosCache[partido.id];
+    
+    let pronostico = null;
+    if (estadoEst.estado === 'terminado') {
+        pronostico = await refrescarPronosticoSiTerminado(partido.id, partido.est);
+    } else {
+        pronostico = pronosticosCache[partido.id];
+    }
+    
     const temp = tempPronosticos.get(partido.id);
     if (temp && (Date.now() - temp.timestamp) < 30000) {
         pronostico = { s1: temp.s1, s2: temp.s2 };
@@ -608,7 +675,16 @@ function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimerDia = 
                 if (realLocal === pronosticoVisita && realVisita === pronosticoLocal) inverso = p.INVERSO;
             }
             
-            const total = ganador + golLocal + golVisita + diferencia + inverso;
+            let total = ganador + golLocal + golVisita + diferencia + inverso;
+            const multiplicadorPulso = getMultiplicadorPulso(pronostico.pul || '0');
+            const totalConPulso = Math.round(total * multiplicadorPulso);
+            
+            let pulsoHTML = '';
+            if (multiplicadorPulso === 0.5) {
+                pulsoHTML = `<div style="margin-top: 4px;"><span style="background: #ff9500; color: #fff; padding: 2px 8px; border-radius: 12px; font-size: 9px;">⚡ PULSO 50</span></div>`;
+            } else if (multiplicadorPulso === 0 && total > 0) {
+                pulsoHTML = `<div style="margin-top: 4px;"><span style="background: #8e8e93; color: #fff; padding: 2px 8px; border-radius: 12px; font-size: 9px;">❌ PULSO 0</span></div>`;
+            }
             
             pronosticoHTML = `<div class="pronostico-container"><div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; gap:12px;">
                 <span style="font-size:11px; color:#8e8e93; flex-shrink:0;">Tu pronóstico:</span>
@@ -618,7 +694,8 @@ function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimerDia = 
                     </div>
                 </div>
                 <div style="background:#fff2f2; border:1px solid #ffd0d0; border-radius:10px; padding:6px 16px; flex-shrink:0;">
-                    <span style="font-size:13px; font-weight:800; color:#c0392b;">${total} pts</span>
+                    <span style="font-size:13px; font-weight:800; color:#c0392b;">${totalConPulso} pts</span>
+                    ${pulsoHTML}
                 </div>
             </div>
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; gap:12px;">
@@ -831,7 +908,7 @@ async function guardarPronostico(ptdId, s1, s2) {
         console.log('[Partidos] Respuesta de Velneo:', respuesta);
         
         if (respuesta.COD === 1) {
-            pronosticosCache[ptdId] = { s1, s2 };
+            pronosticosCache[ptdId] = { s1, s2, pul: '1' };
             actualizarLocalStorage();
             actualizarCardPartido(ptdId, s1, s2);
             mostrarToast('✅ Pronóstico guardado correctamente', 'ok');
@@ -841,6 +918,8 @@ async function guardarPronostico(ptdId, s1, s2) {
                 clearTimeout(syncIntervals.get(ptdId));
                 syncIntervals.delete(ptdId);
             }
+            
+            setTimeout(() => sincronizarConVelneo(ptdId), 2000);
             
             if (ptdId === 1 && globalCambiarVistaCallback) {
                 setTimeout(() => { 
@@ -905,7 +984,17 @@ function abrirModal(partido, fechaSim, horaSim) {
         const realDiferencia = Math.abs(realLocal - realVisita);
         if (pronosticoDiferencia === realDiferencia) diferencia = p.DIFERENCIA;
         if (pronosticoGanador !== realGanador && realLocal === pronosticoVisita && realVisita === pronosticoLocal) inverso = p.INVERSO;
-        const total = ganador + golLocal + golVisita + diferencia + inverso;
+        
+        let total = ganador + golLocal + golVisita + diferencia + inverso;
+        const multiplicadorPulso = getMultiplicadorPulso(pronostico.pul || '0');
+        const totalConPulso = Math.round(total * multiplicadorPulso);
+        
+        let pulsoHTML = '';
+        if (multiplicadorPulso === 0.5) {
+            pulsoHTML = `<div style="margin-top: 8px; text-align: center;"><span style="background: #ff9500; color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 10px;">⚡ PULSO 50 - Puntos reducidos a la mitad</span></div>`;
+        } else if (multiplicadorPulso === 0 && total > 0) {
+            pulsoHTML = `<div style="margin-top: 8px; text-align: center;"><span style="background: #8e8e93; color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 10px;">❌ PULSO 0 - Sin puntos</span></div>`;
+        }
         
         const overlay = document.createElement('div');
         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:3000;display:flex;align-items:flex-end;justify-content:center;';
@@ -936,7 +1025,8 @@ function abrirModal(partido, fechaSim, horaSim) {
                 <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>📊 Diferencia de goles</span><span style="color:${diferencia>0?'#34c759':'#ff3b30'}">${diferencia} pts</span></div>
                 <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>🔄 Marcador inverso</span><span style="color:${inverso>0?'#34c759':'#ff3b30'}">${inverso} pts</span></div>
                 <div style="height:1px;background:#e5e5ea;margin:8px 0;"></div>
-                <div style="display:flex;justify-content:space-between;"><span style="font-weight:700;">⭐ TOTAL</span><span style="color:#ff9500;font-weight:800;">${total} pts</span></div>
+                <div style="display:flex;justify-content:space-between;"><span style="font-weight:700;">⭐ TOTAL</span><span style="color:#ff9500;font-weight:800;">${totalConPulso} pts</span></div>
+                ${pulsoHTML}
             </div>
             <button id="cerrar-modal-accion" style="width:100%;background:#007aff;color:#fff;border:none;border-radius:14px;padding:14px;font-size:16px;cursor:pointer;">Cerrar</button>
         </div>`;
@@ -1073,34 +1163,42 @@ async function refrescarContenido() {
     const primerDia = obtenerPrimerDiaConPartidos(partidosVisibles);
     
     if (tabActivo === 'todos') {
-        contenedorScroll.innerHTML = `<div style="padding:16px;"><div id="partidos-lista">${partidosVisibles.map(p => {
+        // CORREGIDO: Promise.all para evitar [object Promise]
+        const cardsPromises = partidosVisibles.map(async (p) => {
             const fechaPartido = p.fch ? p.fch.split('T')[0] : '';
             const tipo = getTipoFondo(fechaPartido, fechaSim);
             const esPrimerDia = (fechaPartido === primerDia);
             return renderPartidoCard(p, fechaSim, horaSim, tipo, esPrimerDia);
-        }).join('')}</div></div>`;
+        });
+        const cards = await Promise.all(cardsPromises);
         
-        // Scroll al primer destacado (hoy o próximo)
+        contenedorScroll.innerHTML = `<div style="padding:16px;"><div id="partidos-lista">${cards.join('')}</div></div>`;
+        
         scrollAPrimerDestacado();
         
     } else if (tabActivo === 'grupos') {
         const partidosGrupo = partidosVisibles.filter(p => p.grupoCalculado === grupoActivo);
+        
+        // CORREGIDO: Promise.all para evitar [object Promise]
+        const cardsPromises = partidosGrupo.map(async (p) => {
+            const fechaPartido = p.fch ? p.fch.split('T')[0] : '';
+            const tipo = getTipoFondo(fechaPartido, fechaSim);
+            const esPrimerDia = (fechaPartido === primerDia);
+            return renderPartidoCard(p, fechaSim, horaSim, tipo, esPrimerDia);
+        });
+        const cards = await Promise.all(cardsPromises);
+        
         const botonesGrupos = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'].map(g => {
             let label = g; if (g === 'K') label = 'K🇨🇴';
             return `<button class="grupo-tab ${grupoActivo === g ? 'active' : ''}" data-grupo="${g}" style="width:48px;height:48px;border-radius:24px;background:${grupoActivo === g ? '#007aff' : '#f2f2f7'};border:1px solid ${grupoActivo === g ? '#007aff' : '#e5e5ea'};color:${grupoActivo === g ? '#fff' : '#3c3c43'};cursor:pointer;font-weight:700;">${label}</button>`;
         }).join('');
+        
         contenedorScroll.innerHTML = `<div style="padding:16px;">
             <div class="grupos-tabs" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;justify-content:center;">${botonesGrupos}</div>
             <div style="background:#f9f9fb;border-radius:14px;border:1px solid #e5e5ea;margin-bottom:20px;overflow-x:auto;">${renderTablaPosiciones(grupoActivo)}</div>
-            <div id="partidos-lista" style="margin-top:16px;">${partidosGrupo.length > 0 ? partidosGrupo.map(p => {
-                const fechaPartido = p.fch ? p.fch.split('T')[0] : '';
-                const tipo = getTipoFondo(fechaPartido, fechaSim);
-                const esPrimerDia = (fechaPartido === primerDia);
-                return renderPartidoCard(p, fechaSim, horaSim, tipo, esPrimerDia);
-            }).join('') : '<div style="text-align:center;padding:40px;color:#8e8e93;">No hay partidos programados para este grupo</div>'}</div>
+            <div id="partidos-lista" style="margin-top:16px;">${cards.length > 0 ? cards.join('') : '<div style="text-align:center;padding:40px;color:#8e8e93;">No hay partidos programados para este grupo</div>'}</div>
         </div>`;
         
-        // FORZAR SCROLL HACIA ARRIBA al entrar a GRUPOS
         setTimeout(() => {
             if (contenedorScroll) {
                 contenedorScroll.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1116,17 +1214,21 @@ async function refrescarContenido() {
         
     } else if (tabActivo === 'colombia') {
         const partidosColombia = partidosVisibles.filter(p => (p.nom_loc === 'Colombia' || p.nom_vis === 'Colombia'));
+        
+        // CORREGIDO: Promise.all para evitar [object Promise]
+        const cardsPromises = partidosColombia.map(async (p) => {
+            const fechaPartido = p.fch ? p.fch.split('T')[0] : '';
+            const tipo = getTipoFondo(fechaPartido, fechaSim);
+            const esPrimerDia = (fechaPartido === primerDia);
+            return renderPartidoCard(p, fechaSim, horaSim, tipo, esPrimerDia);
+        });
+        const cards = await Promise.all(cardsPromises);
+        
         contenedorScroll.innerHTML = `<div style="padding:16px;">
             <div style="margin-bottom:16px;"><h3 style="color:#1c1c1e; font-size:16px; margin:0;">🇨🇴 Partidos de Colombia</h3></div>
-            <div id="partidos-lista" style="margin-top:16px;">${partidosColombia.length > 0 ? partidosColombia.map(p => {
-                const fechaPartido = p.fch ? p.fch.split('T')[0] : '';
-                const tipo = getTipoFondo(fechaPartido, fechaSim);
-                const esPrimerDia = (fechaPartido === primerDia);
-                return renderPartidoCard(p, fechaSim, horaSim, tipo, esPrimerDia);
-            }).join('') : '<div style="text-align:center;padding:40px;color:#8e8e93;">No hay partidos programados para Colombia</div>'}</div>
+            <div id="partidos-lista" style="margin-top:16px;">${cards.length > 0 ? cards.join('') : '<div style="text-align:center;padding:40px;color:#8e8e93;">No hay partidos programados para Colombia</div>'}</div>
         </div>`;
         
-        // Scroll arriba en Colombia también
         setTimeout(() => {
             if (contenedorScroll) {
                 contenedorScroll.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1173,7 +1275,6 @@ export async function renderizarPartidos(contenedor, datosCuenta, tabInicial = '
         onSimuladorCambio(() => refrescarContenido()); 
     }
     
-    // Restablecer grupoActivo a 'A' al entrar a GRUPOS
     if (tabInicial === 'grupos') {
         grupoActivo = 'A';
     }
@@ -1191,7 +1292,6 @@ export async function renderizarPartidos(contenedor, datosCuenta, tabInicial = '
         tab.onclick = () => cambiarTab(tab.dataset.tab); 
     });
     
-    // Establecer tabActivo según tabInicial
     tabActivo = tabInicial;
     refrescarContenido();
     
