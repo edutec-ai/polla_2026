@@ -66,7 +66,12 @@ let globalCambiarVistaCallback = null;
 
 function mostrarToast(msg, tipo) {
     const toast = document.getElementById('app-toast');
-    if (toast) { toast.textContent = msg; toast.className = 'toast ' + (tipo || ''); toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 3000); }
+    if (toast) {
+        toast.innerHTML = msg;  // ← AHORA ACEPTA HTML
+        toast.className = 'toast ' + (tipo || '');
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 3000);
+    }
 }
 
 export function setGlobalCambiarVistaCallback(callback) {
@@ -1079,7 +1084,7 @@ function abrirModal(partido, fechaSim, horaSim) {
     
     // CASO 2: 2do tiempo (est=3) → No se puede apostar
     if (estadoEst.estado === 'segundo_tiempo') {
-        mostrarToast('🔒 Partido en 2do tiempo. No se aceptan más pronósticos.', 'err');
+        mostrarToast('🔒 Partido en 2do tiempo. <br>No se aceptan más pronósticos.', 'err');
         return;
     }
     
@@ -1088,7 +1093,7 @@ function abrirModal(partido, fechaSim, horaSim) {
         const yaTienePronostico = pronosticosCache[partido.id] !== undefined;
         
         if (yaTienePronostico) {
-            mostrarToast('🔴 Ya tienes un pronóstico para este partido. No se puede modificar durante el partido.', 'err');
+            mostrarToast('🔴 Ya tienes un pronóstico para este partido. <br>No se puede modificar durante el partido.', 'err');
             return;
         }
         
