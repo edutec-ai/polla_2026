@@ -4,6 +4,7 @@
 // CORREGIDO: Scroll vertical habilitado en móvil para fp-body-zone-contenido
 // CORREGIDO: Opción "TV" agregada al menú de DESKTOP (NO visible en móvil)
 // CORREGIDO: Al llamar a partidos, se puede especificar pestaña inicial (todos/grupos/colombia)
+// CORREGIDO: La consulta de pronósticos de partidos ahora incluye 'pul' (PULSO)
 // EXPONE FUNCIÓN GLOBAL PARA CAMBIAR DE VISTA DESDE OTROS MÓDULOS
 
 import { inicializarMenu } from './menu.js';
@@ -49,7 +50,6 @@ function cambiarVistaPrincipal(opcion, datosCuenta, tabEspecial = null, tabParti
                 renderizarAhora(contenidoContainer, datosCuenta);
                 break;
             case 'partidos':
-                // Pasar la pestaña inicial si viene especificada
                 renderizarPartidos(contenidoContainer, datosCuenta, tabPartidos || 'todos');
                 break;
             case 'especiales':
@@ -98,8 +98,8 @@ async function cargarDatosIniciales(jugadorId) {
     const equiposCache = dataEquipos.fifa_equ || [];
     guardarEquiposCacheLocal(equiposCache);
     
-    // 2. PARTIDOS - 104 pronósticos (con timestamp anti-cache)
-    const partidosUrl = urlWithTimestamp(`${BASE_V2}/fifa_jug_pro?api_key=${KEY}&filter[id]=${jugadorId}&fields=jug,jug.name,id,ptd,pro_gol_loc,pro_gol_vis,pro_res&filterQuery[ptd.cic]=1`);
+    // 2. PARTIDOS - 104 pronósticos (con timestamp anti-cache) - INCLUYENDO 'pul'
+    const partidosUrl = urlWithTimestamp(`${BASE_V2}/fifa_jug_pro?api_key=${KEY}&filter[id]=${jugadorId}&fields=jug,jug.name,id,ptd,pro_gol_loc,pro_gol_vis,pro_res,pul&filterQuery[ptd.cic]=1`);
     console.log('[Sync] Fetching partidos:', partidosUrl);
     const responsePartidos = await fetch(partidosUrl);
     if (!responsePartidos.ok) throw new Error('Error cargando partidos');
@@ -110,11 +110,12 @@ async function cargarDatosIniciales(jugadorId) {
       pronosticosPartidos[p.ptd] = { 
         s1: p.pro_gol_loc || 0, 
         s2: p.pro_gol_vis || 0,
-        res: p.pro_res || null
+        res: p.pro_res || null,
+        pul: p.pul || '0'  // ← NUEVO: guardar PULSO
       };
     });
     guardarPronosticosPartidosLocal(pronosticosPartidos);
-    console.log(`[Sync] ✅ Guardados ${Object.keys(pronosticosPartidos).length} pronósticos de partidos`);
+    console.log(`[Sync] ✅ Guardados ${Object.keys(pronosticosPartidos).length} pronósticos de partidos (con PULSO)`);
     
     // 3. CLASIFICADOS POR GRUPO + FINALISTAS (con timestamp anti-cache)
     const especialesUrl = urlWithTimestamp(`${BASE}/fifa_jug?api_key=${KEY}&filter[id]=${jugadorId}`);
