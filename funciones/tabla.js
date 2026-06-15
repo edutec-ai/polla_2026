@@ -3,7 +3,9 @@
 // EXCLUYE usuarios de prueba: 'super', 'mundial'
 // EXCLUYE usuarios con 0 puntos
 // ORGANIZADORES al final del grupo de puntos
-// Título actualizado: "Tabla de Posiciones Dinámica" + "Esta tabla se actualiza con el resultado en vivo"
+// CON BOTÓN PDF - Reutiliza la función generarPDF de reglas.js
+
+import { generarPDF } from './reglas.js';
 
 const BASE = 'https://server.sion.hysintegrar.com/fifa2026/vERP_2_dat_dat/v1';
 const KEY = 'SuzvTp4qwXQtAVFJbdzP';
@@ -99,7 +101,7 @@ export async function renderizarTabla(contenedor, datosCuenta) {
             return (a.name || '').localeCompare(b.name || '');
         });
         
-        // ✅ CAMBIO 1: Mostrar TODOS los jugadores (sin límite de 50)
+        // Mostrar TODOS los jugadores (sin límite de 50)
         const todosLosJugadores = jugadoresActivos;
         
         if (todosLosJugadores.length === 0) {
@@ -113,12 +115,22 @@ export async function renderizarTabla(contenedor, datosCuenta) {
             return;
         }
         
-        // ✅ CAMBIO 2: Nuevo título y subtítulo
+        // CONTAINER CON TÍTULO Y BOTÓN PDF SIDE BY SIDE
         let html = `
             <div style="padding: 16px; height: 100%; overflow-y: auto;">
-                <div style="background: rgba(0,0,0,0.2); border-radius: 20px; padding: 12px 16px; margin-bottom: 16px;">
-                    <div style="font-size: 18px; font-weight: 700; color: white;">🏆 Tabla de Posiciones Dinámica</div>
-                    <div style="font-size: 11px; color: rgba(255,255,255,0.5);">Esta tabla se actualiza con el resultado en vivo</div>
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 16px;">
+                    <!-- Contenedor izquierdo (título + subtítulo) -->
+                    <div style="background: rgba(0,0,0,0.2); border-radius: 20px; padding: 12px 16px; flex: 1;">
+                        <div style="font-size: 18px; font-weight: 700; color: white;">🏆 Tabla de Posiciones Dinámica</div>
+                        
+                        <div style="font-size: 12px; color: #ffd60a;">Esta tabla se actualiza con el resultado en vivo</div>
+                    
+                        </div>
+                    
+                    <!-- Contenedor derecho (botón PDF) -->
+                    <div id="btn-pdf-tabla" style="background: rgba(255,255,255,0.15); border-radius: 20px; padding: 12px 20px; cursor: pointer; transition: all 0.2s ease;">
+                        <div style="font-size: 14px; font-weight: 600; color: white; text-align: center;">📄 PDF</div>
+                    </div>
                 </div>
                 
                 <div style="background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); border-radius: 20px; overflow: hidden; overflow-x: auto;">
@@ -173,6 +185,14 @@ export async function renderizarTabla(contenedor, datosCuenta) {
         `;
         
         contenedor.innerHTML = html;
+        
+        // Evento para el botón PDF
+        const btnPDF = document.getElementById('btn-pdf-tabla');
+        if (btnPDF) {
+            btnPDF.addEventListener('click', () => {
+                generarPDF(datosCuenta);
+            });
+        }
         
     } catch (error) {
         console.error('[Tabla] Error cargando datos:', error);
