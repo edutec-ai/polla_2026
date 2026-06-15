@@ -5,6 +5,8 @@
 // - ✅ Para partidos TERMINADOS, ignora cache local y siempre consulta API fresca
 // - ✅ Forzar actualización de 'pul' cuando el partido está en est=4
 // - ✅ CORREGIDO: Promise.all para evitar [object Promise]
+// - ✅ NUEVO: Permite apostar durante 1er tiempo (est=2) solo si NO tiene pronóstico (PULSO 50)
+// - ✅ NUEVO: Bloquea completamente en 2do tiempo (est=3) y terminado (est=4)
 // - Acepta parámetro tabInicial (todos/grupos/colombia)
 // - Scroll automático al inicio cuando se cambia a GRUPOS
 // - Grupo A activo por defecto al entrar a GRUPOS
@@ -159,6 +161,7 @@ async function cargarEquipos() {
     }
 }
 
+// ========== FUNCIÓN CORREGIDA: Diferencia entre 1er tiempo y 2do tiempo ==========
 function getEstadoPartidoPorEst(partido) {
     const est = Number(partido.est);
     
@@ -173,17 +176,31 @@ function getEstadoPartidoPorEst(partido) {
         };
     }
     
-    if (est === 2 || est === 3) {
+    // 1er tiempo - puede apostar SOLO si no tiene pronóstico
+    if (est === 2) {
         return { 
-            estado: 'envivo', 
-            texto: 'EN VIVO',
+            estado: 'primer_tiempo', 
+            texto: 'EN VIVO (1T)',
             icono: '🟡',
+            editable: true,  // Permitir evaluar después (validar si tiene pronóstico)
+            visible: true,
+            puntosBase: 0
+        };
+    }
+    
+    // 2do tiempo - NADIE puede apostar
+    if (est === 3) {
+        return { 
+            estado: 'segundo_tiempo', 
+            texto: 'EN VIVO (2T)',
+            icono: '🔴',
             editable: false,
             visible: true,
             puntosBase: 0
         };
     }
     
+    // Partido pendiente (est=1)
     return { 
         estado: 'pendiente', 
         texto: '',
@@ -206,7 +223,7 @@ function getMarcadorEnVivo(partido) {
         
         return { 
             tieneMarcador: true, 
-            texto: 'EN VIVO',
+            texto: est === 2 ? 'EN VIVO (1T)' : 'EN VIVO (2T)',
             gol_loc: golLoc,
             gol_vis: golVis
         };
@@ -602,8 +619,10 @@ async function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimer
     let badgeHTML = '';
     if (estadoEst.estado === 'terminado') {
         badgeHTML = `<div style="text-align:center; margin-bottom:10px;"><span style="background:rgba(52, 199, 89, 0.15); padding:4px 12px; border-radius:20px; color:#34c759; font-size:13px; font-weight:700;">${estadoEst.icono} ${estadoEst.texto}</span></div>`;
-    } else if (estadoEst.estado === 'envivo') {
-        badgeHTML = `<div style="text-align:center; margin-bottom:10px;"><span style="background:rgba(255, 149, 0, 0.15); padding:4px 12px; border-radius:20px; color:#ff9500; font-size:13px; font-weight:700;">${estadoEst.icono} ${estadoEst.texto}</span></div>`;
+    } else if (estadoEst.estado === 'primer_tiempo') {
+        badgeHTML = `<div style="text-align:center; margin-bottom:10px;"><span style="background:rgba(255, 149, 0, 0.15); padding:4px 12px; border-radius:20px; color:#ff9500; font-size:13px; font-weight:700;">🟡 PULSO 50 - 1er TIEMPO</span></div>`;
+    } else if (estadoEst.estado === 'segundo_tiempo') {
+        badgeHTML = `<div style="text-align:center; margin-bottom:10px;"><span style="background:rgba(142, 142, 147, 0.15); padding:4px 12px; border-radius:20px; color:#8e8e93; font-size:13px; font-weight:700;">🔴 CERRADO - 2do TIEMPO</span></div>`;
     }
     
     const fechaFormateada = formatearFecha(partido.fch);
@@ -624,10 +643,16 @@ async function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimer
     
     if (resultadoReal && estadoEst.estado === 'terminado') {
         centroHTML = `<div style="font-size:20px; font-weight:700; color:#000;">${resultadoReal.gol_loc} - ${resultadoReal.gol_vis}</div>`;
-    } else if (estadoEst.estado === 'envivo' && marcadorEnVivo) {
+    } else if (estadoEst.estado === 'primer_tiempo' && marcadorEnVivo) {
         centroHTML = `
             <div style="font-size:20px; font-weight:700; color:#ff3b30;">${marcadorEnVivo.gol_loc} - ${marcadorEnVivo.gol_vis}</div>
-            <div style="font-size:10px; color:#ff9500; margin-top:4px;">🔴 ${marcadorEnVivo.texto}</div>
+            <div style="font-size:10px; color:#ff9500; margin-top:4px;">🔴 1er TIEMPO</div>
+        `;
+        centroExtraClass = 'centro-marcador-envivo';
+    } else if (estadoEst.estado === 'segundo_tiempo' && marcadorEnVivo) {
+        centroHTML = `
+            <div style="font-size:20px; font-weight:700; color:#ff3b30;">${marcadorEnVivo.gol_loc} - ${marcadorEnVivo.gol_vis}</div>
+            <div style="font-size:10px; color:#8e8e93; margin-top:4px;">⚫ 2do TIEMPO</div>
         `;
         centroExtraClass = 'centro-marcador-envivo';
     } else if (estadoEst.estado === 'pendiente') {
@@ -718,7 +743,7 @@ async function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimer
                 <div style="width:70px; flex-shrink:0;"></div>
             </div></div>`;
         }
-    } else if (esFuturo && puedeEditar) {
+    } else if ((esFuturo && puedeEditar) || estadoEst.estado === 'primer_tiempo') {
         pronosticoHTML = '<div class="pronostico-container"><div style="margin-top:8px; text-align:center;"><span style="font-size:11px; color:#007aff; font-weight:600;">⚽ HAZ TU PRONÓSTICO</span></div></div>';
     }
     
@@ -820,9 +845,13 @@ async function actualizarMarcadoresEnVivo() {
                         ? partido.gol_vis 
                         : (partido.t90_gol_vis || 0);
                     
+                    const est = Number(partido.est);
+                    const texto = est === 2 ? '1er TIEMPO' : '2do TIEMPO';
+                    const color = est === 2 ? '#ff9500' : '#8e8e93';
+                    
                     centroDiv.innerHTML = `
                         <div style="font-size:20px; font-weight:700; color:#ff3b30;">${golLoc} - ${golVis}</div>
-                        <div style="font-size:10px; color:#ff9500; margin-top:4px;">🔴 EN VIVO</div>
+                        <div style="font-size:10px; color:${color}; margin-top:4px;">🔴 ${texto}</div>
                     `;
                 }
             }
@@ -881,7 +910,8 @@ function scrollAPrimerDestacado() {
     }, 500);
 }
 
-async function guardarPronostico(ptdId, s1, s2) {
+// ========== FUNCIÓN GUARDAR PRONÓSTICO CORREGIDA (con parámetro pul) ==========
+async function guardarPronostico(ptdId, s1, s2, pul = '1') {
     if (!currentJugador) { 
         mostrarToast('Inicia sesión primero', 'err'); 
         return; 
@@ -900,7 +930,8 @@ async function guardarPronostico(ptdId, s1, s2) {
                 id: ptdId, 
                 pro_gol_loc: s1, 
                 pro_gol_vis: s2, 
-                pro_res: s1 > s2 ? '1' : s2 > s1 ? '2' : 'X' 
+                pro_res: s1 > s2 ? '1' : s2 > s1 ? '2' : 'X',
+                pul: pul  // ✅ NUEVO: enviar el pulso correspondiente
             })
         });
         
@@ -908,10 +939,15 @@ async function guardarPronostico(ptdId, s1, s2) {
         console.log('[Partidos] Respuesta de Velneo:', respuesta);
         
         if (respuesta.COD === 1) {
-            pronosticosCache[ptdId] = { s1, s2, pul: '1' };
+            pronosticosCache[ptdId] = { s1, s2, pul: pul };
             actualizarLocalStorage();
             actualizarCardPartido(ptdId, s1, s2);
-            mostrarToast('✅ Pronóstico guardado correctamente', 'ok');
+            
+            if (pul === '2') {
+                mostrarToast('✅ Pronóstico guardado con PULSO 50 (puntos reducidos a la mitad)', 'ok');
+            } else {
+                mostrarToast('✅ Pronóstico guardado correctamente', 'ok');
+            }
             
             tempPronosticos.delete(ptdId);
             if (syncIntervals.has(ptdId)) {
@@ -958,6 +994,7 @@ function validarInputNumerico(input) {
     });
 }
 
+// ========== FUNCIÓN ABRIR MODAL CORREGIDA (validación PULSO 50) ==========
 function abrirModal(partido, fechaSim, horaSim) {
     const estadoEst = getEstadoPartidoPorEst(partido);
     let pronostico = pronosticosCache[partido.id] || { s1: 0, s2: 0 };
@@ -965,6 +1002,9 @@ function abrirModal(partido, fechaSim, horaSim) {
     if (temp && (Date.now() - temp.timestamp) < 30000) { pronostico = { s1: temp.s1, s2: temp.s2 }; }
     const ptsBase = estadoEst.puntosBase || getPtsBase(partido.fas);
     
+    // ========== VALIDACIONES DE APUESTA ==========
+    
+    // CASO 1: Partido terminado (est=4) → Solo ver detalles, no apostar
     if (estadoEst.estado === 'terminado') {
         const resultadoReal = getResultadoReal(partido.id);
         if (!resultadoReal) { mostrarToast('Partido finalizado sin resultados disponibles', 'err'); return; }
@@ -1037,20 +1077,45 @@ function abrirModal(partido, fechaSim, horaSim) {
         return;
     }
     
-    if (estadoEst.estado === 'envivo') {
-        mostrarToast('🔴 Partido EN VIVO. No se aceptan más pronósticos.', 'err');
+    // CASO 2: 2do tiempo (est=3) → No se puede apostar
+    if (estadoEst.estado === 'segundo_tiempo') {
+        mostrarToast('🔒 Partido en 2do tiempo. No se aceptan más pronósticos.', 'err');
         return;
     }
     
-    if (!estadoEst.editable) {
+    // CASO 3: 1er tiempo (est=2) → Solo puede apostar si NO tiene pronóstico
+    if (estadoEst.estado === 'primer_tiempo') {
+        const yaTienePronostico = pronosticosCache[partido.id] !== undefined;
+        
+        if (yaTienePronostico) {
+            mostrarToast('🔴 Ya tienes un pronóstico para este partido. No se puede modificar durante el partido.', 'err');
+            return;
+        }
+        
+        // ✅ Puede apostar con PULSO 50
+        console.log('[Partidos] Usuario sin pronóstico, puede apostar en 1er tiempo con PULSO 50');
+        // Continuar con el modal (con mensaje de PULSO 50)
+    }
+    
+    // CASO 4: Partido pendiente (est=1) → Puede apostar con PULSO 100
+    if (estadoEst.estado !== 'pendiente' && estadoEst.estado !== 'primer_tiempo') {
         mostrarToast('🔒 Este partido no está disponible para pronósticos', 'err');
         return;
     }
     
+    // Determinar el pulso que se enviará al guardar
+    const pulsoAEnviar = (estadoEst.estado === 'primer_tiempo') ? '2' : '1';
+    const puntosBaseParaModal = (estadoEst.estado === 'primer_tiempo') ? Math.round(ptsBase * 0.5) : ptsBase;
+    
+    let mensajePulso = '';
+    if (estadoEst.estado === 'primer_tiempo') {
+        mensajePulso = `🟡 PULSO 50 · Estás apostando durante el 1er tiempo. Si aciertas el marcador exacto tendrás ${puntosBaseParaModal} puntos (50% del total).`;
+    } else {
+        mensajePulso = `🟢 PULSO 100 · Si aciertas el marcador exacto tendrás ${ptsBase} puntos.`;
+    }
+    
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:3000;display:flex;align-items:flex-end;justify-content:center;';
-    
-    const mensajePulso = `🟢 PULSO 100 · Si aciertas el marcador exacto tendrás ${ptsBase} puntos.`;
     
     overlay.innerHTML = `<div style="background:#fff;border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;">
         <div style="display:flex;justify-content:space-between;margin-bottom:16px;">
@@ -1092,12 +1157,12 @@ function abrirModal(partido, fechaSim, horaSim) {
         
         <div style="background:#f2f2f7;border-radius:12px;padding:12px;margin-bottom:16px;">
             <div style="font-size:14px;font-weight:700;margin-bottom:12px;">📋 Detalle de puntos</div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>🏆 Ganador / Empate</span><span style="color:#34c759;font-weight:700;">${Math.round(ptsBase * 0.4)} pts</span></div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>⚽ Gol local exacto</span><span style="color:#34c759;font-weight:700;">${Math.round(ptsBase * 0.2)} pts</span></div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>⚽ Gol visita exacto</span><span style="color:#34c759;font-weight:700;">${Math.round(ptsBase * 0.2)} pts</span></div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>📊 Diferencia de goles</span><span style="color:#34c759;font-weight:700;">${Math.round(ptsBase * 0.2)} pts</span></div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>🏆 Ganador / Empate</span><span style="color:#34c759;font-weight:700;">${Math.round(puntosBaseParaModal * 0.4)} pts</span></div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>⚽ Gol local exacto</span><span style="color:#34c759;font-weight:700;">${Math.round(puntosBaseParaModal * 0.2)} pts</span></div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>⚽ Gol visita exacto</span><span style="color:#34c759;font-weight:700;">${Math.round(puntosBaseParaModal * 0.2)} pts</span></div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>📊 Diferencia de goles</span><span style="color:#34c759;font-weight:700;">${Math.round(puntosBaseParaModal * 0.2)} pts</span></div>
             <div style="height:1px;background:#e5e5ea;margin:8px 0;"></div>
-            <div style="display:flex;justify-content:space-between;"><span style="font-weight:700;">⭐ BASE</span><span style="color:#ff9500;font-weight:800;">${ptsBase} pts</span></div>
+            <div style="display:flex;justify-content:space-between;"><span style="font-weight:700;">⭐ BASE</span><span style="color:#ff9500;font-weight:800;">${puntosBaseParaModal} pts</span></div>
         </div>
         
         <div style="background:#eafaf1;border-radius:12px;padding:12px;margin-bottom:16px;text-align:center;">
@@ -1127,7 +1192,7 @@ function abrirModal(partido, fechaSim, horaSim) {
             const s1 = parseInt(s1Input?.value) || 0; 
             const s2 = parseInt(s2Input?.value) || 0; 
             overlay.remove();
-            guardarPronostico(partido.id, s1, s2); 
+            guardarPronostico(partido.id, s1, s2, pulsoAEnviar); 
         };
     }
     
@@ -1163,7 +1228,6 @@ async function refrescarContenido() {
     const primerDia = obtenerPrimerDiaConPartidos(partidosVisibles);
     
     if (tabActivo === 'todos') {
-        // CORREGIDO: Promise.all para evitar [object Promise]
         const cardsPromises = partidosVisibles.map(async (p) => {
             const fechaPartido = p.fch ? p.fch.split('T')[0] : '';
             const tipo = getTipoFondo(fechaPartido, fechaSim);
@@ -1179,7 +1243,6 @@ async function refrescarContenido() {
     } else if (tabActivo === 'grupos') {
         const partidosGrupo = partidosVisibles.filter(p => p.grupoCalculado === grupoActivo);
         
-        // CORREGIDO: Promise.all para evitar [object Promise]
         const cardsPromises = partidosGrupo.map(async (p) => {
             const fechaPartido = p.fch ? p.fch.split('T')[0] : '';
             const tipo = getTipoFondo(fechaPartido, fechaSim);
@@ -1215,7 +1278,6 @@ async function refrescarContenido() {
     } else if (tabActivo === 'colombia') {
         const partidosColombia = partidosVisibles.filter(p => (p.nom_loc === 'Colombia' || p.nom_vis === 'Colombia'));
         
-        // CORREGIDO: Promise.all para evitar [object Promise]
         const cardsPromises = partidosColombia.map(async (p) => {
             const fechaPartido = p.fch ? p.fch.split('T')[0] : '';
             const tipo = getTipoFondo(fechaPartido, fechaSim);
