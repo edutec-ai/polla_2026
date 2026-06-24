@@ -2,12 +2,15 @@
 // VERSIÓN 7 COLUMNAS - Partidos simultáneos agrupados por bloque
 // Columnas: LOCAL | VS | VISITANTE | SEP | LOCAL | VS | VISITANTE
 // - Agrupa partidos por GRUPO + HORA (partidos simultáneos)
-// - 2 filas: Fila 1 (nombres), Fila 2 (banderas)
+// - 2 filas: Fila 1 (nombres en doble línea), Fila 2 (banderas)
 // - Scroll vertical DENTRO de la card
 // - SIN scroll horizontal
 // - Click → redirige a partidos.js con tab='todos'
 // - MOCK INTELIGENTE: solo se muestra si NO hay partidos reales en la API
 // - Nombres de equipos CORREGIDOS para que coincidan con la API y las banderas
+// - SEPARADOR AZUL en columna 4
+// - FOOTER ELIMINADO
+// - DOBLE LÍNEA para nombres largos
 
 import { cargarPartidos, getBandera, formatearHora12h } from './partidos.js';
 
@@ -192,6 +195,29 @@ function generarMockPartidos() {
     ];
 }
 
+// ========== DIVIDIR NOMBRE EN DOBLE LÍNEA ==========
+function dividirNombre(nombre) {
+    if (!nombre) return '';
+    
+    // Si el nombre es corto (<= 12 caracteres), una sola línea
+    if (nombre.length <= 12) return nombre;
+    
+    // Buscar espacio para dividir
+    const espacio = nombre.indexOf(' ');
+    if (espacio > 0 && espacio <= 12) {
+        const parte1 = nombre.substring(0, espacio);
+        const parte2 = nombre.substring(espacio + 1);
+        if (parte2.length > 0) {
+            return parte1 + '<br>' + parte2;
+        }
+        return nombre;
+    }
+    
+    // Si no hay espacio, dividir a la mitad
+    const mitad = Math.ceil(nombre.length / 2);
+    return nombre.substring(0, mitad) + '<br>' + nombre.substring(mitad);
+}
+
 // ========== RENDERIZAR BLOQUE DE PARTIDOS (7 COLUMNAS) ==========
 function renderizarBloque(bloque) {
     const { grupo, hora, partidos } = bloque;
@@ -233,10 +259,11 @@ function renderizarBloque(bloque) {
     const centro1 = getColumnaCentral(estado1, p1);
     const centro2 = getColumnaCentral(estado2, p2);
     
-    const nombreLocal1 = p1.nom_loc.length > 10 ? p1.nom_loc.substring(0, 9) + '…' : p1.nom_loc;
-    const nombreVisita1 = p1.nom_vis.length > 10 ? p1.nom_vis.substring(0, 9) + '…' : p1.nom_vis;
-    const nombreLocal2 = p2.nom_loc.length > 10 ? p2.nom_loc.substring(0, 9) + '…' : p2.nom_loc;
-    const nombreVisita2 = p2.nom_vis.length > 10 ? p2.nom_vis.substring(0, 9) + '…' : p2.nom_vis;
+    // Nombres en doble línea
+    const nombreLocal1 = dividirNombre(p1.nom_loc);
+    const nombreVisita1 = dividirNombre(p1.nom_vis);
+    const nombreLocal2 = dividirNombre(p2.nom_loc);
+    const nombreVisita2 = dividirNombre(p2.nom_vis);
     
     const badgeGrupo = grupo && grupo !== 'X' ? `Grupo ${grupo}` : 'Fase 1';
     
@@ -255,21 +282,23 @@ function renderizarBloque(bloque) {
                 <span style="font-size: 11px; font-weight: 600; color: #007aff;">⏰ ${horaFormateada}</span>
             </div>
             
-            <div style="display: grid; grid-template-columns: 1fr 0.7fr 1fr 0.1fr 1fr 0.7fr 1fr; gap: 2px; align-items: center; text-align: center; margin-bottom: 4px;">
-                <div style="font-size: 10px; font-weight: 600; color: rgba(0,0,0,0.8);">${nombreLocal1}</div>
+            <!-- GRID DE 7 COLUMNAS - FILA 1: NOMBRES (DOBLE LÍNEA) -->
+            <div style="display: grid; grid-template-columns: 1fr 0.7fr 1fr 0.1fr 1fr 0.7fr 1fr; gap: 2px; align-items: center; text-align: center; margin-bottom: 4px; min-height: 36px;">
+                <div style="font-size: 9px; font-weight: 600; color: rgba(0,0,0,0.8); line-height: 1.2;">${nombreLocal1}</div>
                 <div style="font-size: 10px; font-weight: 600; color: rgba(0,0,0,0.4);">${centro1}</div>
-                <div style="font-size: 10px; font-weight: 600; color: rgba(0,0,0,0.8);">${nombreVisita1}</div>
+                <div style="font-size: 9px; font-weight: 600; color: rgba(0,0,0,0.8); line-height: 1.2;">${nombreVisita1}</div>
                 
                 <!-- COLUMNA 4: SEPARADOR AZUL -->
                 <div style="display: flex; justify-content: center; align-items: center; height: 100%;">
                     <div style="width: 2px; height: 60%; background: #007aff; opacity: 0.3; border-radius: 2px;"></div>
                 </div>
                 
-                <div style="font-size: 10px; font-weight: 600; color: rgba(0,0,0,0.8);">${nombreLocal2}</div>
+                <div style="font-size: 9px; font-weight: 600; color: rgba(0,0,0,0.8); line-height: 1.2;">${nombreLocal2}</div>
                 <div style="font-size: 10px; font-weight: 600; color: rgba(0,0,0,0.4);">${centro2}</div>
-                <div style="font-size: 10px; font-weight: 600; color: rgba(0,0,0,0.8);">${nombreVisita2}</div>
+                <div style="font-size: 9px; font-weight: 600; color: rgba(0,0,0,0.8); line-height: 1.2;">${nombreVisita2}</div>
             </div>
             
+            <!-- GRID DE 7 COLUMNAS - FILA 2: BANDERAS -->
             <div style="display: grid; grid-template-columns: 1fr 0.7fr 1fr 0.1fr 1fr 0.7fr 1fr; gap: 2px; align-items: center; text-align: center;">
                 <div style="font-size: 28px; line-height: 1.2;">${getBandera(p1.nom_loc)}</div>
                 <div style="font-size: 10px; font-weight: 700; color: rgba(0,0,0,0.2);">VS</div>
@@ -377,15 +406,6 @@ async function renderizarAhora(contenedor, datosCuenta) {
                 background: rgba(255, 255, 255, 0.15);
                 border-radius: 4px;
             }
-            .ahora-footer {
-                padding: 10px;
-                text-align: center;
-                border-top: 1px solid rgba(255, 255, 255, 0.04);
-                font-size: 9px;
-                color: rgba(255, 255, 255, 0.2);
-                flex-shrink: 0;
-                letter-spacing: 0.3px;
-            }
             .ahora-bloque {
                 cursor: pointer;
                 transition: all 0.2s ease;
@@ -422,8 +442,6 @@ async function renderizarAhora(contenedor, datosCuenta) {
             <div class="ahora-scroll" id="ahora-scroll">
                 ${bloquesHtml}
             </div>
-            
-           
         </div>
     `;
     
