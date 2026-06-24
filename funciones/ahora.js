@@ -181,8 +181,6 @@ function detenerCountdownAhora() {
 
 // ========== GENERAR MOCK PARA PRUEBAS ==========
 function generarMockPartidos() {
-    // Fijamos la fecha al 24 de junio para pruebas
-    // Cuando la API tenga partidos reales, el mock se desactiva automáticamente
     const fechaMock = '2026-06-24';
     return [
         { id: 9991, nom_loc: 'Suiza', nom_vis: 'Canadá', fch: fechaMock, hor: '14:00:00', est: '1', grp_for: 'B', fas: '1' },
@@ -261,7 +259,12 @@ function renderizarBloque(bloque) {
                 <div style="font-size: 10px; font-weight: 600; color: rgba(0,0,0,0.8);">${nombreLocal1}</div>
                 <div style="font-size: 10px; font-weight: 600; color: rgba(0,0,0,0.4);">${centro1}</div>
                 <div style="font-size: 10px; font-weight: 600; color: rgba(0,0,0,0.8);">${nombreVisita1}</div>
-                <div style="font-size: 10px; color: rgba(0,0,0,0.08); text-align: center;">│</div>
+                
+                <!-- COLUMNA 4: SEPARADOR AZUL -->
+                <div style="display: flex; justify-content: center; align-items: center; height: 100%;">
+                    <div style="width: 2px; height: 60%; background: #007aff; opacity: 0.3; border-radius: 2px;"></div>
+                </div>
+                
                 <div style="font-size: 10px; font-weight: 600; color: rgba(0,0,0,0.8);">${nombreLocal2}</div>
                 <div style="font-size: 10px; font-weight: 600; color: rgba(0,0,0,0.4);">${centro2}</div>
                 <div style="font-size: 10px; font-weight: 600; color: rgba(0,0,0,0.8);">${nombreVisita2}</div>
@@ -271,7 +274,12 @@ function renderizarBloque(bloque) {
                 <div style="font-size: 28px; line-height: 1.2;">${getBandera(p1.nom_loc)}</div>
                 <div style="font-size: 10px; font-weight: 700; color: rgba(0,0,0,0.2);">VS</div>
                 <div style="font-size: 28px; line-height: 1.2;">${getBandera(p1.nom_vis)}</div>
-                <div style="font-size: 10px; color: rgba(0,0,0,0.06); text-align: center;">│</div>
+                
+                <!-- COLUMNA 4: SEPARADOR AZUL -->
+                <div style="display: flex; justify-content: center; align-items: center; height: 100%;">
+                    <div style="width: 2px; height: 60%; background: #007aff; opacity: 0.3; border-radius: 2px;"></div>
+                </div>
+                
                 <div style="font-size: 28px; line-height: 1.2;">${getBandera(p2.nom_loc)}</div>
                 <div style="font-size: 10px; font-weight: 700; color: rgba(0,0,0,0.2);">VS</div>
                 <div style="font-size: 28px; line-height: 1.2;">${getBandera(p2.nom_vis)}</div>
@@ -306,8 +314,6 @@ async function renderizarAhora(contenedor, datosCuenta) {
     let partidosHoy = obtenerPartidosDeHoy(partidos);
     
     // ========== MOCK INTELIGENTE ==========
-    // Solo se ejecuta si NO hay partidos reales en la API
-    // Cuando la API tenga partidos reales, el mock se desactiva automáticamente
     if (partidosHoy.length === 0) {
         partidosHoy = generarMockPartidos();
         console.log('🧪 MODO PRUEBA - Usando mock porque no hay partidos reales en la API');
@@ -353,16 +359,6 @@ async function renderizarAhora(contenedor, datosCuenta) {
                 font-weight: 700;
                 color: rgba(255, 255, 255, 0.9);
                 margin-bottom: 2px;
-            }
-            .ahora-badge {
-                display: inline-block;
-                background: linear-gradient(135deg, #007aff 0%, #5856d6 100%);
-                color: white;
-                padding: 3px 12px;
-                border-radius: 20px;
-                font-size: 10px;
-                font-weight: 600;
-                letter-spacing: 0.5px;
             }
             .ahora-scroll {
                 overflow-y: auto;
@@ -421,7 +417,6 @@ async function renderizarAhora(contenedor, datosCuenta) {
         <div class="ahora-container">
             <div class="ahora-header">
                 <div class="ahora-titulo">🏆 PARTIDOS DE HOY</div>
-                <span class="ahora-badge">🎯 HAZ TUS PRONÓSTICOS</span>
             </div>
             
             <div class="ahora-scroll" id="ahora-scroll">
