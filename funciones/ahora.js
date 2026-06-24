@@ -423,9 +423,7 @@ async function renderizarAhora(contenedor, datosCuenta) {
                 ${bloquesHtml}
             </div>
             
-            <div class="ahora-footer">
-                💡 Haz clic en cualquier bloque para pronosticar
-            </div>
+           
         </div>
     `;
     
