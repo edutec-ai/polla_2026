@@ -797,9 +797,9 @@ async function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimer
             const avanzaVisita = pro_res === '2';
             
             if (avanzaVisita && Number(partido.fas) >= 2) {
-                alargueInfo = `<div style="display:flex; justify-content:center; align-items:center; gap:4px; margin-top:4px; font-size:10px; color:#f1c40f; font-weight:600;">⭐ ${partido.nom_vis} avanza en alargue</div>`;
+                alargueInfo = `<div style="display:flex; justify-content:center; align-items:center; gap:4px; margin-top:4px; font-size:10px; color:#007aff; font-weight:600;">⭐ ${partido.nom_vis} avanza en alargue</div>`;
             } else if (avanzaLocal && Number(partido.fas) >= 2) {
-                alargueInfo = `<div style="display:flex; justify-content:center; align-items:center; gap:4px; margin-top:4px; font-size:10px; color:#f1c40f; font-weight:600;">⭐ ${partido.nom_loc} avanza en alargue</div>`;
+                alargueInfo = `<div style="display:flex; justify-content:center; align-items:center; gap:4px; margin-top:4px; font-size:10px; color:#007aff; font-weight:600;">⭐ ${partido.nom_loc} avanza en alargue</div>`;
             }
             
             pronosticoHTML = `<div class="pronostico-container">
