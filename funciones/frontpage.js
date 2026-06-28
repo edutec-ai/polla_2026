@@ -1,6 +1,6 @@
 // funciones/frontpage.js
 // VERSIÓN CORREGIDA - CON TIMESTAMP ANTI-CACHE EN TODOS LOS GET
-// CORREGIDO: Los puntos del encabezado ahora muestran el valor real de Velneo (pts)
+// CORREGIDO: Los puntos del encabezado ahora muestran pts_par_fnl (solo finales)
 // CORREGIDO: Scroll vertical habilitado en móvil para fp-body-zone-contenido
 // CORREGIDO: Opción "TV" agregada al menú de DESKTOP (NO visible en móvil)
 // CORREGIDO: Al llamar a partidos, se puede especificar pestaña inicial (todos/grupos/colombia)
@@ -32,13 +32,11 @@ const KEY = 'SuzvTp4qwXQtAVFJbdzP';
 
 let globalCambiarVista = null;
 
-// Función helper para agregar timestamp anti-cache a URLs GET
 function urlWithTimestamp(url) {
   const separator = url.includes('?') ? '&' : '?';
   return `${url}${separator}_=${Date.now()}`;
 }
 
-// Función para cambiar la vista principal (expuesta globalmente)
 function cambiarVistaPrincipal(opcion, datosCuenta, tabEspecial = null, tabPartidos = null) {
     const contenidoContainer = document.getElementById('fp-body-contenido');
     if (!contenidoContainer) return;
@@ -89,7 +87,6 @@ async function cargarDatosIniciales(jugadorId) {
   console.log('[Sync] Cargando datos iniciales desde API para jugador:', jugadorId);
   
   try {
-    // 1. Cargar equipos (con timestamp anti-cache)
     const equiposUrl = urlWithTimestamp(`${BASE}/fifa_equ?api_key=${KEY}`);
     console.log('[Sync] Fetching equipos:', equiposUrl);
     const responseEquipos = await fetch(equiposUrl);
@@ -98,7 +95,6 @@ async function cargarDatosIniciales(jugadorId) {
     const equiposCache = dataEquipos.fifa_equ || [];
     guardarEquiposCacheLocal(equiposCache);
     
-    // 2. PARTIDOS - 104 pronósticos (con timestamp anti-cache) - INCLUYENDO 'pul'
     const partidosUrl = urlWithTimestamp(`${BASE_V2}/fifa_jug_pro?api_key=${KEY}&filter[id]=${jugadorId}&fields=jug,jug.name,id,ptd,pro_gol_loc,pro_gol_vis,pro_res,pul&filterQuery[ptd.cic]=1`);
     console.log('[Sync] Fetching partidos:', partidosUrl);
     const responsePartidos = await fetch(partidosUrl);
@@ -111,13 +107,12 @@ async function cargarDatosIniciales(jugadorId) {
         s1: p.pro_gol_loc || 0, 
         s2: p.pro_gol_vis || 0,
         res: p.pro_res || null,
-        pul: p.pul || '0'  // ← NUEVO: guardar PULSO
+        pul: p.pul || '0'
       };
     });
     guardarPronosticosPartidosLocal(pronosticosPartidos);
     console.log(`[Sync] ✅ Guardados ${Object.keys(pronosticosPartidos).length} pronósticos de partidos (con PULSO)`);
     
-    // 3. CLASIFICADOS POR GRUPO + FINALISTAS (con timestamp anti-cache)
     const especialesUrl = urlWithTimestamp(`${BASE}/fifa_jug?api_key=${KEY}&filter[id]=${jugadorId}`);
     console.log('[Sync] Fetching especiales:', especialesUrl);
     const responseEspeciales = await fetch(especialesUrl);
@@ -213,7 +208,6 @@ export async function cargarFrontpage(datosCuenta) {
     `;
   }
   
-  // Variable para almacenar los puntos reales desde Velneo
   let puntosReales = 0;
   
   if (jugadorId) {
@@ -221,15 +215,15 @@ export async function cargarFrontpage(datosCuenta) {
       await cargarDatosIniciales(jugadorId);
       console.log('[Frontpage] Datos cargados exitosamente, procediendo a renderizar');
       
-      // Consultar los puntos reales del jugador desde Velneo
+      // 🔥 CAMBIO: Consultar pts_par_fnl (puntos de finales) en lugar de pts
       const puntosUrl = urlWithTimestamp(`${BASE}/fifa_jug?api_key=${KEY}&filter[id]=${jugadorId}`);
       const responsePuntos = await fetch(puntosUrl);
       if (responsePuntos.ok) {
         const dataPuntos = await responsePuntos.json();
         const jugadorActualizado = dataPuntos.fifa_jug?.[0];
-        if (jugadorActualizado && jugadorActualizado.pts !== undefined) {
-          puntosReales = jugadorActualizado.pts;
-          console.log('[Frontpage] Puntos reales del jugador:', puntosReales);
+        if (jugadorActualizado && jugadorActualizado.pts_par_fnl !== undefined) {
+          puntosReales = jugadorActualizado.pts_par_fnl;
+          console.log('[Frontpage] Puntos de finales (pts_par_fnl):', puntosReales);
         }
       }
     } catch (error) {
@@ -250,16 +244,13 @@ export async function cargarFrontpage(datosCuenta) {
   
   onSimuladorCambio((fecha, hora) => console.log('📅 Simulador actualizado:', fecha, hora));
   
-  // Exponer función global para cambiar de vista (con soporte para tabPartidos)
   globalCambiarVista = (opcion, cuenta, tabEspecial = null, tabPartidos = null) => 
     cambiarVistaPrincipal(opcion, cuenta, tabEspecial, tabPartidos);
   
-  // Registrar callbacks para otros módulos
   setAhoraCambiarVistaCallback(globalCambiarVista);
   setReglasCallback(globalCambiarVista);
   setGlobalCambiarVistaCallback(globalCambiarVista);
   
-  // Suscribir ahora.js al simulador
   suscribirAhoraAlSimulador();
   
   const manejarSeleccionMenu = (opcion, cuenta) => {
@@ -268,6 +259,7 @@ export async function cargarFrontpage(datosCuenta) {
   
   const idCuenta = datosCuenta.id || '—';
   const nombreCuenta = datosCuenta.name || datosCuenta.nombre || 'Cuenta';
+  // 🔥 CAMBIO: Usar puntosReales (que ahora es pts_par_fnl)
   const puntosCuenta = puntosReales || datosCuenta.ptr || datosCuenta.pun || 0;
   const usrAsociado = datosCuenta.usr || '—';
   const estadoCuenta = datosCuenta.off ? 'Inactiva' : 'Activa';
@@ -354,7 +346,6 @@ export async function cargarFrontpage(datosCuenta) {
         min-height: 0;
       }
       
-      /* Estilos para scroll vertical en el contenedor de contenido */
       #fp-body-contenido {
         height: 100%;
         overflow-y: auto;
@@ -514,7 +505,6 @@ export async function cargarFrontpage(datosCuenta) {
     </div>
   `;
 
-  // MENÚ DESKTOP - con opción TV (solo visible en desktop)
   const opcionesMenu = [
     { id: 'ahora', nombre: 'AHORA', color: '#34c759', icono: '🏠' },
     { id: 'partidos', nombre: 'PARTIDOS', color: '#007aff', icono: '⚽' },
@@ -546,7 +536,6 @@ export async function cargarFrontpage(datosCuenta) {
     }, 400);
   };
   
-  // MENÚ MÓVIL - SIN opción TV (solo visible en móvil)
   const mobileTabBar = document.getElementById('mobile-tab-bar');
   if (mobileTabBar) {
     const opcionesMovil = [
