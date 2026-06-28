@@ -27,6 +27,7 @@
 // - ✅ NUEVO: SCROLL VERTICAL en modal (max-height: 90vh, overflow-y: auto)
 // - ✅ NUEVO: Tamaños reducidos en modal (banderas 40px, nombres 13px)
 // - ✅ NUEVO: Modal centrado verticalmente
+// - ✅ NUEVO: Pestaña GRUPOS muestra imagen CRUCES DE 16AVOS (cruces.jpg)
 // - ✅ CORREGIDO: cargarPronosticos() LEE pro_res DE VELNEO
 // - ✅ CORREGIDO: obtenerPronosticoFresco() LEE pro_res DE VELNEO
 // - ✅ CORREGIDO: obtenerPronosticoActual() LEE pro_res DE VELNEO
@@ -38,7 +39,6 @@
 // - NO actualiza cache hasta que Velneo confirme éxito (COD=1)
 // - Lee respuesta de Velneo (COD y DES)
 // - Revertir a valor original si hay error
-// - Tabla de posiciones con columna flexible
 // - Redirección desde ahora.js funciona correctamente
 
 import { onSimuladorCambio, simGetFechaStr, simGetHoraStr } from './lab.js';
@@ -479,6 +479,8 @@ function getFaseMaximaPorFecha(fecha) {
     return 1;
 }
 
+// ========== RENDER TABLA POSICIONES (YA NO SE USA EN GRUPOS) ==========
+// Mantenemos la función por si se necesita en otro lugar, pero ya no se usa en GRUPOS
 function renderTablaPosiciones(grupo) {
     const equiposGrupo = equiposCache.filter(e => obtenerGrupoPorEquipo(e.name) === grupo);
     const clasificados = gruposSeleccion[grupo] || {};
@@ -797,9 +799,9 @@ async function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimer
             const avanzaVisita = pro_res === '2';
             
             if (avanzaVisita && Number(partido.fas) >= 2) {
-                alargueInfo = `<div style="display:flex; justify-content:center; align-items:center; gap:4px; margin-top:4px; font-size:10px; color:#007aff; font-weight:600;">⭐ ${partido.nom_vis} avanza en alargue</div>`;
+                alargueInfo = `<div style="display:flex; justify-content:center; align-items:center; gap:4px; margin-top:4px; font-size:10px; color:#f1c40f; font-weight:600;">⭐ ${partido.nom_vis} avanza en alargue</div>`;
             } else if (avanzaLocal && Number(partido.fas) >= 2) {
-                alargueInfo = `<div style="display:flex; justify-content:center; align-items:center; gap:4px; margin-top:4px; font-size:10px; color:#007aff; font-weight:600;">⭐ ${partido.nom_loc} avanza en alargue</div>`;
+                alargueInfo = `<div style="display:flex; justify-content:center; align-items:center; gap:4px; margin-top:4px; font-size:10px; color:#f1c40f; font-weight:600;">⭐ ${partido.nom_loc} avanza en alargue</div>`;
             }
             
             pronosticoHTML = `<div class="pronostico-container">
@@ -1573,6 +1575,7 @@ async function refrescarDatosPartidos() {
     mostrarToast('✅ Partidos actualizados', 'ok');
 }
 
+// ========== REFRESCAR CONTENIDO ==========
 async function refrescarContenido() {
     const contenedorScroll = document.getElementById('partidos-contenido-scroll');
     if (!contenedorScroll) return;
@@ -1600,6 +1603,7 @@ async function refrescarContenido() {
     const primerDia = obtenerPrimerDiaConPartidos(partidosVisibles);
     
     if (tabActivo === 'todos') {
+        // ===== VISTA "TODOS" =====
         const cardsPromises = partidosVisibles.map(async (p) => {
             const fechaPartido = p.fch ? p.fch.split('T')[0] : '';
             const tipo = getTipoFondo(fechaPartido, fechaSim);
@@ -1613,41 +1617,29 @@ async function refrescarContenido() {
         scrollAPrimerDestacado();
         
     } else if (tabActivo === 'grupos') {
-        const partidosGrupo = partidosVisibles.filter(p => p.grupoCalculado === grupoActivo && p.fas === 1);
+        // ===== VISTA "GRUPOS" - AHORA MUESTRA LA IMAGEN DE CRUCES =====
+        // Eliminamos los botones de grupos, la tabla de posiciones y los partidos del grupo
+        // Mostramos la imagen cruces.jpg autoajustable
         
-        const cardsPromises = partidosGrupo.map(async (p) => {
-            const fechaPartido = p.fch ? p.fch.split('T')[0] : '';
-            const tipo = getTipoFondo(fechaPartido, fechaSim);
-            const esPrimerDia = (fechaPartido === primerDia);
-            return renderPartidoCard(p, fechaSim, horaSim, tipo, esPrimerDia);
-        });
-        const cards = await Promise.all(cardsPromises);
+        contenedorScroll.innerHTML = `
+            <div style="display: flex; justify-content: center; align-items: center; padding: 16px; min-height: 400px;">
+                <img 
+                    src="./img/cruces.jpg" 
+                    alt="Cruces de 16avos de final - Mundial 2026" 
+                    style="max-width: 100%; height: auto; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);"
+                />
+            </div>
+        `;
         
-        const botonesGrupos = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'].map(g => {
-            let label = g; if (g === 'K') label = 'K🇨🇴';
-            return `<button class="grupo-tab ${grupoActivo === g ? 'active' : ''}" data-grupo="${g}" style="width:48px;height:48px;border-radius:24px;background:${grupoActivo === g ? '#007aff' : '#f2f2f7'};border:1px solid ${grupoActivo === g ? '#007aff' : '#e5e5ea'};color:${grupoActivo === g ? '#fff' : '#3c3c43'};cursor:pointer;font-weight:700;">${label}</button>`;
-        }).join('');
-        
-        contenedorScroll.innerHTML = `<div style="padding:16px;">
-            <div class="grupos-tabs" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;justify-content:center;">${botonesGrupos}</div>
-            <div style="background:#f9f9fb;border-radius:14px;border:1px solid #e5e5ea;margin-bottom:20px;overflow-x:auto;">${renderTablaPosiciones(grupoActivo)}</div>
-            <div id="partidos-lista" style="margin-top:16px;">${cards.length > 0 ? cards.join('') : '<div style="text-align:center;padding:40px;color:#8e8e93;">No hay partidos programados para este grupo</div>'}</div>
-        </div>`;
-        
+        // Scroll al inicio al entrar a GRUPOS
         setTimeout(() => {
             if (contenedorScroll) {
                 contenedorScroll.scrollTo({ top: 0, behavior: 'smooth' });
             }
         }, 100);
         
-        document.querySelectorAll('.grupo-tab').forEach(btn => { 
-            btn.onclick = () => { 
-                grupoActivo = btn.dataset.grupo; 
-                refrescarContenido(); 
-            }; 
-        });
-        
     } else if (tabActivo === 'colombia') {
+        // ===== VISTA "COLOMBIA" =====
         const partidosColombia = partidosVisibles.filter(p => (p.nom_loc === 'Colombia' || p.nom_vis === 'Colombia'));
         
         const cardsPromises = partidosColombia.map(async (p) => {
@@ -1716,7 +1708,7 @@ export async function renderizarPartidos(contenedor, datosCuenta, tabInicial = '
     contenedor.innerHTML = `<div style="width:100%;height:100%;display:flex;flex-direction:column;background:#fff;border-radius:16px;overflow:hidden;">
         <div style="flex-shrink:0;display:flex;gap:8px;padding:12px 16px;background:#fff;border-bottom:1px solid #e5e5ea;">
             <button class="partidos-tab ${tabInicial === 'todos' ? 'active' : ''}" data-tab="todos" style="flex:1;padding:10px;border:none;border-radius:12px;background:${tabInicial === 'todos' ? '#007aff' : '#f2f2f7'};color:${tabInicial === 'todos' ? '#fff' : '#3c3c43'};cursor:pointer;">📋 TODOS</button>
-            <button class="partidos-tab ${tabInicial === 'grupos' ? 'active' : ''}" data-tab="grupos" style="flex:1;padding:10px;border:none;border-radius:12px;background:${tabInicial === 'grupos' ? '#007aff' : '#f2f2f7'};color:${tabInicial === 'grupos' ? '#fff' : '#3c3c43'};cursor:pointer;">📊 GRUPOS</button>
+            <button class="partidos-tab ${tabInicial === 'grupos' ? 'active' : ''}" data-tab="grupos" style="flex:1;padding:10px;border:none;border-radius:12px;background:${tabInicial === 'grupos' ? '#007aff' : '#f2f2f7'};color:${tabInicial === 'grupos' ? '#fff' : '#3c3c43'};cursor:pointer;">📊 CRUCES</button>
             <button class="partidos-tab ${tabInicial === 'colombia' ? 'active' : ''}" data-tab="colombia" style="flex:1;padding:10px;border:none;border-radius:12px;background:${tabInicial === 'colombia' ? '#007aff' : '#f2f2f7'};color:${tabInicial === 'colombia' ? '#fff' : '#3c3c43'};cursor:pointer;">🇨🇴 COLOMBIA</button>
         </div>
         <div id="partidos-contenido-scroll" style="flex:1;overflow-y:auto;"></div>
