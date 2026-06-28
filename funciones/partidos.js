@@ -1,6 +1,6 @@
 // funciones/partidos.js
 // Módulo de Partidos - La Polla Mundialista 2026
-// CORREGIDO:
+// ACTUALIZADO:
 // - ✅ Implementado sistema de PULSO (multiplicador de puntos según campo 'pul' de Velneo)
 // - ✅ Para partidos TERMINADOS, ignora cache local y siempre consulta API fresca
 // - ✅ Forzar actualización de 'pul' cuando el partido está en est=4
@@ -10,6 +10,25 @@
 // - ✅ NUEVO: Valores vacíos (placeholder "-") cuando pul=0 (nunca ha pronosticado)
 // - ✅ NUEVO: Mensajes de toast en dos líneas con <br>
 // - ✅ NUEVO: Badge de advertencia para 0-0
+// - ✅ NUEVO: Filtro dinámico por fase (fas <= faseMax) para acumulación progresiva
+// - ✅ NUEVO: Función getFaseMaximaPorFecha() para mapear fecha → fase máxima
+// - ✅ NUEVO: Selector de alargue en modal para fases finales (fas >= 2)
+// - ✅ NUEVO: Bonus Alargue en detalle de puntos
+// - ✅ NUEVO: Badge 0-0 movido ARRIBA en el modal
+// - ✅ NUEVO: Selector de alargue centrado, con banderas grandes y texto azul
+// - ✅ NUEVO: Radio buttons de alargue SIN SELECCIÓN por defecto
+// - ✅ NUEVO: Captura correcta de la selección de alargue al guardar
+// - ✅ NUEVO: pro_res se sobrescribe correctamente con la selección de alargue
+// - ✅ NUEVO: pro_res se guarda en pronosticosCache
+// - ✅ NUEVO: INDICADOR "⭐ avanza en alargue" en cards de partidos
+// - ✅ NUEVO: Modal carga pronóstico existente (inputs y selector de alargue)
+// - ✅ NUEVO: Modal de partido terminado con desglose de puntos
+// - ✅ NUEVO: Badge "MARCADOR 90 MINUTOS" debajo de la cancha en el modal
+// - ✅ CORREGIDO: cargarPronosticos() LEE pro_res DE VELNEO
+// - ✅ CORREGIDO: obtenerPronosticoFresco() LEE pro_res DE VELNEO
+// - ✅ CORREGIDO: obtenerPronosticoActual() LEE pro_res DE VELNEO
+// - ✅ CORREGIDO: renderizarPartidos() SIEMPRE consulta API al cargar (forceRefresh=true)
+// - ✅ CORREGIDO: refrescarContenido() usa forceRefresh=false (para mantener rendimiento)
 // - Acepta parámetro tabInicial (todos/grupos/colombia)
 // - Scroll automático al inicio cuando se cambia a GRUPOS
 // - Grupo A activo por defecto al entrar a GRUPOS
@@ -235,6 +254,8 @@ function getMarcadorEnVivo(partido) {
     return null;
 }
 
+// ========== FUNCIONES DE LECTURA DE VELNEO (LEEN pro_res) ==========
+
 async function obtenerPronosticoActual(ptdId) {
     if (!currentJugador) return null;
     try {
@@ -246,7 +267,8 @@ async function obtenerPronosticoActual(ptdId) {
             return { 
                 s1: pronostico.pro_gol_loc || 0, 
                 s2: pronostico.pro_gol_vis || 0,
-                pul: pronostico.pul || '0'
+                pul: pronostico.pul || '0',
+                pro_res: pronostico.pro_res || 'X'
             };
         }
         return null;
@@ -267,7 +289,8 @@ async function obtenerPronosticoFresco(ptdId) {
             return { 
                 s1: pronostico.pro_gol_loc || 0, 
                 s2: pronostico.pro_gol_vis || 0,
-                pul: pronostico.pul || '0'
+                pul: pronostico.pul || '0',
+                pro_res: pronostico.pro_res || 'X'
             };
         }
         return null;
@@ -282,7 +305,12 @@ async function sincronizarConVelneo(ptdId) {
     try {
         const valorActual = await obtenerPronosticoActual(ptdId);
         if (valorActual) {
-            pronosticosCache[ptdId] = { s1: valorActual.s1, s2: valorActual.s2, pul: valorActual.pul };
+            pronosticosCache[ptdId] = { 
+                s1: valorActual.s1, 
+                s2: valorActual.s2, 
+                pul: valorActual.pul, 
+                pro_res: valorActual.pro_res || 'X' 
+            };
             guardarPronosticosPartidosLocal(pronosticosCache);
             const temp = tempPronosticos.get(ptdId);
             if (temp && (temp.s1 !== valorActual.s1 || temp.s2 !== valorActual.s2)) {
@@ -329,6 +357,7 @@ function actualizarCardPartido(ptdId, s1, s2) {
     }
 }
 
+// ========== CARGAR PRONÓSTICOS (LEE pro_res DE VELNEO) ==========
 async function cargarPronosticos(jugId, forceRefresh = false) {
     if (!jugId) return;
     
@@ -350,11 +379,12 @@ async function cargarPronosticos(jugId, forceRefresh = false) {
             pronosticosCache[p.ptd] = { 
                 s1: p.pro_gol_loc || 0, 
                 s2: p.pro_gol_vis || 0,
-                pul: p.pul || '0'
+                pul: p.pul || '0',
+                pro_res: p.pro_res || 'X'
             }; 
         });
         guardarPronosticosPartidosLocal(pronosticosCache);
-        console.log(`[Partidos] ✅ ${Object.keys(pronosticosCache).length} pronósticos desde API (con PULSO)`);
+        console.log(`[Partidos] ✅ ${Object.keys(pronosticosCache).length} pronósticos desde API (con PULSO y pro_res)`);
     } catch (error) { 
         console.error('Error cargando pronósticos:', error); 
     }
@@ -367,7 +397,12 @@ async function refrescarPronosticoSiTerminado(ptdId, est) {
             const actual = pronosticosCache[ptdId];
             if (!actual || actual.s1 !== pronosticoFresco.s1 || actual.s2 !== pronosticoFresco.s2 || actual.pul !== pronosticoFresco.pul) {
                 console.log(`[Partidos] Actualizando pronóstico fresco para partido terminado ${ptdId}: pul=${pronosticoFresco.pul}`);
-                pronosticosCache[ptdId] = { s1: pronosticoFresco.s1, s2: pronosticoFresco.s2, pul: pronosticoFresco.pul };
+                pronosticosCache[ptdId] = { 
+                    s1: pronosticoFresco.s1, 
+                    s2: pronosticoFresco.s2, 
+                    pul: pronosticoFresco.pul, 
+                    pro_res: pronosticoFresco.pro_res || 'X' 
+                };
                 guardarPronosticosPartidosLocal(pronosticosCache);
                 return pronosticoFresco;
             }
@@ -425,6 +460,20 @@ function getResultadoReal(partidoId) {
         };
     }
     return null;
+}
+
+// ========== FUNCIÓN: FASE MÁXIMA SEGÚN FECHA ==========
+function getFaseMaximaPorFecha(fecha) {
+    if (!fecha) return 1;
+    
+    if (fecha <= '2026-06-27') return 1;
+    if (fecha >= '2026-06-28' && fecha <= '2026-07-03') return 2;
+    if (fecha >= '2026-07-04' && fecha <= '2026-07-08') return 3;
+    if (fecha >= '2026-07-09' && fecha <= '2026-07-13') return 4;
+    if (fecha >= '2026-07-14' && fecha <= '2026-07-17') return 5;
+    if (fecha === '2026-07-18') return 6;
+    if (fecha >= '2026-07-19') return 7;
+    return 1;
 }
 
 function renderTablaPosiciones(grupo) {
@@ -738,17 +787,32 @@ async function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimer
                 <div style="width:70px; flex-shrink:0;"></div>
             </div></div>`;
         } else {
-            pronosticoHTML = `<div class="pronostico-container"><div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; gap:12px;">
-                <span style="font-size:11px; color:#8e8e93; flex-shrink:0;">Tu pronóstico:</span>
-                <div style="flex:1; display:flex; justify-content:center;">
-                    <div style="background:#f2f2f7; border-radius:10px; padding:6px 16px; display:inline-block;">
-                        <span style="font-size:16px; font-weight:700; color:#007aff;">
-                            ${pronostico && pronostico.pul !== '0' ? `${pronostico.s1} - ${pronostico.s2}` : '—'}
-                        </span>
+            // ========== PRONÓSTICO CON INDICADOR DE ALARGUE ==========
+            let alargueInfo = '';
+            const pro_res = pronosticosCache[partido.id]?.pro_res || 'X';
+            const avanzaLocal = pro_res === '1';
+            const avanzaVisita = pro_res === '2';
+            
+            if (avanzaVisita && Number(partido.fas) >= 2) {
+                alargueInfo = `<div style="display:flex; justify-content:center; align-items:center; gap:4px; margin-top:4px; font-size:10px; color:#f1c40f; font-weight:600;">⭐ ${partido.nom_vis} avanza en alargue</div>`;
+            } else if (avanzaLocal && Number(partido.fas) >= 2) {
+                alargueInfo = `<div style="display:flex; justify-content:center; align-items:center; gap:4px; margin-top:4px; font-size:10px; color:#f1c40f; font-weight:600;">⭐ ${partido.nom_loc} avanza en alargue</div>`;
+            }
+            
+            pronosticoHTML = `<div class="pronostico-container">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; gap:12px;">
+                    <span style="font-size:11px; color:#8e8e93; flex-shrink:0;">Tu pronóstico:</span>
+                    <div style="flex:1; display:flex; justify-content:center; flex-direction:column; align-items:center;">
+                        <div style="background:#f2f2f7; border-radius:10px; padding:6px 16px; display:inline-block;">
+                            <span style="font-size:16px; font-weight:700; color:#007aff;">
+                                ${pronostico && pronostico.pul !== '0' ? `${pronostico.s1} - ${pronostico.s2}` : '—'}
+                            </span>
+                        </div>
+                        ${alargueInfo}
                     </div>
+                    <div style="width:70px; flex-shrink:0;"></div>
                 </div>
-                <div style="width:70px; flex-shrink:0;"></div>
-            </div></div>`;
+            </div>`;
         }
     } else if ((esFuturo && estadoEst.editable) || estadoEst.estado === 'primer_tiempo') {
         pronosticoHTML = '<div class="pronostico-container"><div style="margin-top:8px; text-align:center;"><span style="font-size:11px; color:#007aff; font-weight:600;">⚽ HAZ TU PRONÓSTICO</span></div></div>';
@@ -917,7 +981,7 @@ function scrollAPrimerDestacado() {
     }, 500);
 }
 
-async function guardarPronostico(ptdId, s1, s2, pul = '1') {
+async function guardarPronostico(ptdId, s1, s2, pul = '1', alargue = null) {
     if (!currentJugador) { 
         mostrarToast('Inicia sesión primero', 'err'); 
         return; 
@@ -926,6 +990,18 @@ async function guardarPronostico(ptdId, s1, s2, pul = '1') {
     const originalPronostico = pronosticosCache[ptdId];
     
     mostrarToast('💾 Guardando...', 'info');
+    
+    // Determinar pro_res basado en el marcador
+    let pro_res = 'X';
+    if (s1 > s2) pro_res = '1';
+    else if (s2 > s1) pro_res = '2';
+    
+    // Si el usuario seleccionó alargue, sobrescribir pro_res
+    if (alargue === 'local') {
+        pro_res = '1';
+    } else if (alargue === 'visita') {
+        pro_res = '2';
+    }
     
     try {
         const response = await fetch(`${BASE_V2}/_process/API_PUT_PAR?api_key=${KEY}`, {
@@ -936,7 +1012,7 @@ async function guardarPronostico(ptdId, s1, s2, pul = '1') {
                 id: ptdId, 
                 pro_gol_loc: s1, 
                 pro_gol_vis: s2, 
-                pro_res: s1 > s2 ? '1' : s2 > s1 ? '2' : 'X',
+                pro_res: pro_res,
                 pul: pul
             })
         });
@@ -945,7 +1021,7 @@ async function guardarPronostico(ptdId, s1, s2, pul = '1') {
         console.log('[Partidos] Respuesta de Velneo:', respuesta);
         
         if (respuesta.COD === 1) {
-            pronosticosCache[ptdId] = { s1, s2, pul: pul };
+            pronosticosCache[ptdId] = { s1, s2, pul: pul, pro_res: pro_res };
             actualizarLocalStorage();
             actualizarCardPartido(ptdId, s1, s2);
             
@@ -1006,36 +1082,54 @@ function validarInputNumerico(input) {
 
 function abrirModal(partido, fechaSim, horaSim) {
     const estadoEst = getEstadoPartidoPorEst(partido);
-    let pronostico = pronosticosCache[partido.id] || { s1: 0, s2: 0, pul: '0' };
+    let pronostico = pronosticosCache[partido.id] || { s1: 0, s2: 0, pul: '0', pro_res: 'X' };
     const temp = tempPronosticos.get(partido.id);
     if (temp && (Date.now() - temp.timestamp) < 30000) { 
-        pronostico = { s1: temp.s1, s2: temp.s2, pul: pronostico.pul || '0' }; 
+        pronostico = { s1: temp.s1, s2: temp.s2, pul: pronostico.pul || '0', pro_res: pronostico.pro_res || 'X' }; 
     }
     const ptsBase = estadoEst.puntosBase || getPtsBase(partido.fas);
+    const fas = Number(partido.fas);
+    const esFaseFinal = fas >= 2;
+    const tienePronostico = pronostico && pronostico.pul !== '0' && pronostico.pul !== undefined;
     
     // ========== VALIDACIONES DE APUESTA ==========
     
     if (estadoEst.estado === 'terminado') {
         const resultadoReal = getResultadoReal(partido.id);
         if (!resultadoReal) { mostrarToast('Partido finalizado sin resultados disponibles', 'err'); return; }
-        const pronosticoLocal = pronostico.s1;
-        const pronosticoVisita = pronostico.s2;
+        const pronosticoLocal = pronostico.s1 || 0;
+        const pronosticoVisita = pronostico.s2 || 0;
         const realLocal = resultadoReal.gol_loc;
         const realVisita = resultadoReal.gol_vis;
-        let ganador = 0, golLocal = 0, golVisita = 0, diferencia = 0, inverso = 0;
+        let ganador = 0, golLocal = 0, golVisita = 0, diferencia = 0, inverso = 0, bonusAlargue = 0;
         const ptsBaseOriginal = getPtsBase(partido.fas);
         const p = { GANADOR: Math.round(ptsBaseOriginal * 0.4), GOL: Math.round(ptsBaseOriginal * 0.2), DIFERENCIA: Math.round(ptsBaseOriginal * 0.2), INVERSO: Math.round(ptsBaseOriginal * 0.2) };
         const pronosticoGanador = pronosticoLocal > pronosticoVisita ? 'local' : (pronosticoVisita > pronosticoLocal ? 'visita' : 'empate');
         const realGanador = realLocal > realVisita ? 'local' : (realVisita > realLocal ? 'visita' : 'empate');
+        
+        const tuvoAlargue = (Number(partido.ext_gol_loc) > 0 || Number(partido.ext_gol_vis) > 0);
+        
         if (pronosticoGanador === realGanador) ganador = p.GANADOR;
         if (realLocal === pronosticoLocal) golLocal = p.GOL;
         if (realVisita === pronosticoVisita) golVisita = p.GOL;
+        
         const pronosticoDiferencia = Math.abs(pronosticoLocal - pronosticoVisita);
         const realDiferencia = Math.abs(realLocal - realVisita);
         if (pronosticoDiferencia === realDiferencia) diferencia = p.DIFERENCIA;
-        if (pronosticoGanador !== realGanador && realLocal === pronosticoVisita && realVisita === pronosticoLocal) inverso = p.INVERSO;
         
-        let total = ganador + golLocal + golVisita + diferencia + inverso;
+        if (pronosticoGanador !== realGanador) {
+            if (realLocal === pronosticoVisita && realVisita === pronosticoLocal) inverso = p.INVERSO;
+        }
+        
+        if (esFaseFinal && tuvoAlargue) {
+            const avanzaReal = realLocal > realVisita ? 'local' : (realVisita > realLocal ? 'visita' : 'empate');
+            const avanzaProno = pronostico.pro_res === '1' ? 'local' : (pronostico.pro_res === '2' ? 'visita' : 'empate');
+            if (avanzaReal === avanzaProno && avanzaProno !== 'empate') {
+                bonusAlargue = p.GANADOR;
+            }
+        }
+        
+        let total = ganador + golLocal + golVisita + diferencia + inverso + bonusAlargue;
         const multiplicadorPulso = getMultiplicadorPulso(pronostico.pul || '0');
         const totalConPulso = Math.round(total * multiplicadorPulso);
         
@@ -1051,29 +1145,36 @@ function abrirModal(partido, fechaSim, horaSim) {
         overlay.innerHTML = `<div style="background:#fff;border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;">
             <div style="display:flex;justify-content:space-between;margin-bottom:16px;"><div style="font-size:17px;font-weight:700;">${partido.grp_for||'Fase '+partido.fas}</div><button id="cerrar-modal-btn" style="background:none;border:none;font-size:22px;">✕</button></div>
             <div style="font-size:12px;color:#8e8e93;margin-bottom:20px;text-align:center;">${formatearFecha(partido.fch)} · ${formatearHora12h(partido.hor)}</div>
+            
             <div style="background:#f2f2f7;border-radius:14px;padding:16px;margin-bottom:16px;">
-                <div style="font-size:12px;color:#8e8e93;margin-bottom:12px;text-align:center;">TU PRONÓSTICO</div>
+                <div style="font-size:12px;color:#8e8e93;margin-bottom:12px;text-align:center;">📋 TU PRONÓSTICO</div>
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <div style="text-align:center; flex:1;"><div style="font-size:40px; margin-bottom:4px;">${getBandera(partido.nom_loc)}</div><div style="font-size:12px;font-weight:600;">${partido.nom_loc}</div><div style="font-size:24px;font-weight:800;color:#007aff;margin-top:8px;">${pronosticoLocal}</div></div>
                     <div style="font-size:20px; font-weight:700; color:#8e8e93;">VS</div>
                     <div style="text-align:center; flex:1;"><div style="font-size:40px; margin-bottom:4px;">${getBandera(partido.nom_vis)}</div><div style="font-size:12px;font-weight:600;">${partido.nom_vis}</div><div style="font-size:24px;font-weight:800;color:#007aff;margin-top:8px;">${pronosticoVisita}</div></div>
                 </div>
+                ${esFaseFinal && pronostico.pro_res === '1' ? `<div style="text-align:center;margin-top:8px;font-size:12px;color:#f1c40f;font-weight:600;">⭐ Avanza: ${partido.nom_loc}</div>` : ''}
+                ${esFaseFinal && pronostico.pro_res === '2' ? `<div style="text-align:center;margin-top:8px;font-size:12px;color:#f1c40f;font-weight:600;">⭐ Avanza: ${partido.nom_vis}</div>` : ''}
             </div>
+            
             <div style="background:#f9f9fb;border-radius:14px;padding:16px;margin-bottom:16px;">
-                <div style="font-size:12px;color:#8e8e93;margin-bottom:12px;text-align:center;">RESULTADO REAL</div>
+                <div style="font-size:12px;color:#8e8e93;margin-bottom:12px;text-align:center;">📋 RESULTADO REAL</div>
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <div style="text-align:center; flex:1;"><div style="font-size:40px; margin-bottom:4px;">${getBandera(partido.nom_loc)}</div><div style="font-size:12px;font-weight:600;">${partido.nom_loc}</div><div style="font-size:24px;font-weight:800;color:#34c759;margin-top:8px;">${realLocal}</div></div>
                     <div style="font-size:20px; font-weight:700; color:#8e8e93;">VS</div>
                     <div style="text-align:center; flex:1;"><div style="font-size:40px; margin-bottom:4px;">${getBandera(partido.nom_vis)}</div><div style="font-size:12px;font-weight:600;">${partido.nom_vis}</div><div style="font-size:24px;font-weight:800;color:#34c759;margin-top:8px;">${realVisita}</div></div>
                 </div>
+                ${esFaseFinal && realGanador === 'empate' ? `<div style="text-align:center;margin-top:8px;font-size:12px;color:#34c759;font-weight:600;">⭐ Avanza: ${realLocal > realVisita ? partido.nom_loc : (realVisita > realLocal ? partido.nom_vis : 'Empate')}</div>` : ''}
             </div>
+            
             <div style="background:#f2f2f7;border-radius:12px;padding:12px;margin-bottom:16px;">
                 <div style="font-size:11px;font-weight:700;margin-bottom:8px;">📊 TU PUNTUACIÓN</div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>🏆 Ganador / Empate</span><span style="color:${ganador>0?'#34c759':'#ff3b30'}">${ganador} pts</span></div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>⚽ Gol local exacto</span><span style="color:${golLocal>0?'#34c759':'#ff3b30'}">${golLocal} pts</span></div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>⚽ Gol visita exacto</span><span style="color:${golVisita>0?'#34c759':'#ff3b30'}">${golVisita} pts</span></div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>📊 Diferencia de goles</span><span style="color:${diferencia>0?'#34c759':'#ff3b30'}">${diferencia} pts</span></div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>🔄 Marcador inverso</span><span style="color:${inverso>0?'#34c759':'#ff3b30'}">${inverso} pts</span></div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>🏆 Ganador / Empate</span><span style="color:${ganador>0?'#34c759':'#ff3b30'}">${ganador} pts</span> ${ganador>0 ? '✅' : '❌'}</div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>⚽ Gol local exacto</span><span style="color:${golLocal>0?'#34c759':'#ff3b30'}">${golLocal} pts</span> ${golLocal>0 ? '✅' : '❌'}</div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>⚽ Gol visita exacto</span><span style="color:${golVisita>0?'#34c759':'#ff3b30'}">${golVisita} pts</span> ${golVisita>0 ? '✅' : '❌'}</div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>📊 Diferencia de goles</span><span style="color:${diferencia>0?'#34c759':'#ff3b30'}">${diferencia} pts</span> ${diferencia>0 ? '✅' : '❌'}</div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>🔄 Marcador inverso</span><span style="color:${inverso>0?'#34c759':'#ff3b30'}">${inverso} pts</span> ${inverso>0 ? '✅' : '❌'}</div>
+                ${bonusAlargue > 0 ? `<div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>⭐ Bonus Alargue</span><span style="color:#f1c40f;font-weight:700;">${bonusAlargue} pts</span> ✅</div>` : ''}
                 <div style="height:1px;background:#e5e5ea;margin:8px 0;"></div>
                 <div style="display:flex;justify-content:space-between;"><span style="font-weight:700;">⭐ TOTAL</span><span style="color:#ff9500;font-weight:800;">${totalConPulso} pts</span></div>
                 ${pulsoHTML}
@@ -1121,9 +1222,69 @@ function abrirModal(partido, fechaSim, horaSim) {
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:3000;display:flex;align-items:flex-end;justify-content:center;';
     
-    const mostrarValorVacio = (pronostico.pul === '0');
-    const valorS1 = mostrarValorVacio ? '' : pronostico.s1;
-    const valorS2 = mostrarValorVacio ? '' : pronostico.s2;
+    const tienePronosticoGuardado = tienePronostico;
+    const valorS1 = tienePronosticoGuardado ? pronostico.s1 : '';
+    const valorS2 = tienePronosticoGuardado ? pronostico.s2 : '';
+    const alargueGuardado = (esFaseFinal && pronostico.pro_res === '1') ? 'local' : 
+                           (esFaseFinal && pronostico.pro_res === '2') ? 'visita' : null;
+    
+    // ========== BADGE "MARCADOR 90 MINUTOS" ==========
+    let badge90HTML = `
+        <div style="text-align: center; margin-bottom: 12px;">
+            <span style="
+                display: inline-block;
+                background: #ffd60a;
+                color: #1a1a2e;
+                font-size: 11px;
+                font-weight: 700;
+                padding: 3px 14px;
+                border-radius: 20px;
+                letter-spacing: 0.5px;
+            ">
+                🟡 MARCADOR 90 MINUTOS
+            </span>
+        </div>
+    `;
+    
+    // ========== BADGE 0-0 ==========
+    let badgeZeroHTML = `
+        <div style="text-align: center; margin-bottom: 12px;">
+            <div style="background:rgb(17, 55, 95); color: white; font-size: 12px; font-weight: 500; padding: 6px 14px; border-radius: 20px; display: inline-block; line-height: 1.4;">
+                ⚠️ Si tu pronóstico es 0-0<br>
+                <span style="color: #ffd60a;">selecciona explícitamente 0 - 0</span>
+            </div>
+        </div>
+    `;
+    
+    // ========== SELECTOR DE ALARGUE ==========
+    let alargueHTML = '';
+    if (esFaseFinal) {
+        const bonusAlargueVal = Math.round(ptsBase * 0.4);
+        const checkedLocal = (alargueGuardado === 'local') ? 'checked' : '';
+        const checkedVisita = (alargueGuardado === 'visita') ? 'checked' : '';
+        alargueHTML = `
+            <div style="background: rgba(0, 122, 255, 0.05); border: 1px solid rgba(0, 122, 255, 0.15); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                <div style="font-size: 14px; font-weight: 600; color: #007aff; text-align: center; margin-bottom: 12px;">
+                    ⚽ En caso de alargue, ¿quién avanza?
+                </div>
+                <div style="display: flex; gap: 16px; justify-content: center;">
+                    <label style="display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; padding: 12px 24px; border-radius: 12px; background: ${alargueGuardado === 'local' ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.05)'}; border: 2px solid ${alargueGuardado === 'local' ? '#007aff' : 'rgba(0,122,255,0.15)'}; transition: all 0.2s; min-width: 100px; flex:1; max-width: 160px;">
+                        <input type="radio" name="alargue" value="local" ${checkedLocal} style="accent-color: #007aff; width: 18px; height: 18px; margin-bottom: 4px;">
+                        <span style="font-size: 28px; line-height: 1.2;">${getBandera(partido.nom_loc)}</span>
+                        <span style="font-size: 15px; font-weight: 600; text-align: center;">${partido.nom_loc || 'Local'}</span>
+                    </label>
+                    <label style="display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; padding: 12px 24px; border-radius: 12px; background: ${alargueGuardado === 'visita' ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.05)'}; border: 2px solid ${alargueGuardado === 'visita' ? '#007aff' : 'rgba(0,122,255,0.15)'}; transition: all 0.2s; min-width: 100px; flex:1; max-width: 160px;">
+                        <input type="radio" name="alargue" value="visita" ${checkedVisita} style="accent-color: #007aff; width: 18px; height: 18px; margin-bottom: 4px;">
+                        <span style="font-size: 28px; line-height: 1.2;">${getBandera(partido.nom_vis)}</span>
+                        <span style="font-size: 15px; font-weight: 600; text-align: center;">${partido.nom_vis || 'Visitante'}</span>
+                    </label>
+                </div>
+                <div style="font-size: 12px; color: #007aff; text-align: center; margin-top: 10px; font-weight: 600;">
+                    ⭐ Bonus Alargue: ${bonusAlargueVal} pts si aciertas quién avanza
+                </div>
+            </div>
+        `;
+    }
     
     overlay.innerHTML = `<div style="background:#fff;border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;">
         <div style="display:flex;justify-content:space-between;margin-bottom:16px;">
@@ -1132,7 +1293,7 @@ function abrirModal(partido, fechaSim, horaSim) {
         </div>
         <div style="font-size:12px;color:#8e8e93;margin-bottom:20px;text-align:center;">${formatearFecha(partido.fch)} · ${formatearHora12h(partido.hor)}</div>
         
-        <div style="background: linear-gradient(135deg, #0a2f1f 0%, #1a5a3a 100%); border-radius: 20px; padding: 16px; margin-bottom: 20px; position: relative; overflow: hidden;">
+        <div style="background: linear-gradient(135deg, #0a2f1f 0%, #1a5a3a 100%); border-radius: 20px; padding: 16px; margin-bottom: 16px; position: relative; overflow: hidden;">
             <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: repeating-linear-gradient(90deg, rgba(0,0,0,0.1) 0px, rgba(0,0,0,0.1) 2px, transparent 2px, transparent 20px); pointer-events: none;"></div>
             <div style="position: absolute; top: 0; left: 0; width: 100%; height: 20%; background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 100%); pointer-events: none;"></div>
             <div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 20%; background: linear-gradient(0deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 100%); pointer-events: none;"></div>
@@ -1146,7 +1307,9 @@ function abrirModal(partido, fechaSim, horaSim) {
             </div>
         </div>
         
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:24px;">
+        ${badge90HTML}
+        
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:12px;">
             <div style="flex:1; text-align:center;">
                 <div style="display:flex; align-items:center; justify-content:center; gap:8px; background:#f9f9fb; border-radius:30px; padding:6px 10px;">
                     <button id="modal-dec-loc" style="width:36px;height:36px;border-radius:18px;background:#fff;border:1px solid #e5e5ea;font-size:18px;font-weight:700;cursor:pointer; display:flex; align-items:center; justify-content:center;">−</button>
@@ -1163,22 +1326,39 @@ function abrirModal(partido, fechaSim, horaSim) {
             </div>
         </div>
         
-        <!-- ========== BADGE DE ADVERTENCIA 0-0 ========== -->
-        <div style="text-align: center; margin-bottom: 16px;">
-            <div style="background:rgb(17, 55, 95); color: white; font-size: 12px; font-weight: 500; padding: 6px 14px; border-radius: 20px; display: inline-block; line-height: 1.4;">
-                ⚠️ Si tu pronóstico es 0-0<br>
-                <span style="color: #ffd60a;">selecciona explícitamente 0 - 0</span>
-            </div>
-        </div>
+        ${badgeZeroHTML}
+        ${alargueHTML}
         
         <div style="background:#f2f2f7;border-radius:12px;padding:12px;margin-bottom:16px;">
             <div style="font-size:14px;font-weight:700;margin-bottom:12px;">📋 Detalle de puntos</div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>🏆 Ganador / Empate</span><span style="color:#34c759;font-weight:700;">${Math.round(puntosBaseParaModal * 0.4)} pts</span></div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>⚽ Gol local exacto</span><span style="color:#34c759;font-weight:700;">${Math.round(puntosBaseParaModal * 0.2)} pts</span></div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>⚽ Gol visita exacto</span><span style="color:#34c759;font-weight:700;">${Math.round(puntosBaseParaModal * 0.2)} pts</span></div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>📊 Diferencia de goles</span><span style="color:#34c759;font-weight:700;">${Math.round(puntosBaseParaModal * 0.2)} pts</span></div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <span>🏆 Ganador / Empate</span>
+                <span style="color:#34c759;font-weight:700;">${Math.round(puntosBaseParaModal * 0.4)} pts</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <span>⚽ Gol local exacto</span>
+                <span style="color:#34c759;font-weight:700;">${Math.round(puntosBaseParaModal * 0.2)} pts</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <span>⚽ Gol visita exacto</span>
+                <span style="color:#34c759;font-weight:700;">${Math.round(puntosBaseParaModal * 0.2)} pts</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <span>📊 Diferencia de goles</span>
+                <span style="color:#34c759;font-weight:700;">${Math.round(puntosBaseParaModal * 0.2)} pts</span>
+            </div>
             <div style="height:1px;background:#e5e5ea;margin:8px 0;"></div>
-            <div style="display:flex;justify-content:space-between;"><span style="font-weight:700;">⭐ BASE</span><span style="color:#ff9500;font-weight:800;">${puntosBaseParaModal} pts</span></div>
+            
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <span style="font-weight:700;">⭐ BASE</span>
+                <span style="color:#ff9500;font-weight:800;">${puntosBaseParaModal} pts</span>
+            </div>
+            
+            ${esFaseFinal ? `
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <span style="font-weight:700;">⭐ Bonus Alargue</span>
+                <span style="color:#f1c40f;font-weight:700;">${Math.round(puntosBaseParaModal * 0.4)} pts</span>
+            </div>` : ''}
         </div>
         
         <div style="background:#eafaf1;border-radius:12px;padding:12px;margin-bottom:16px;text-align:center;">
@@ -1233,8 +1413,17 @@ function abrirModal(partido, fechaSim, horaSim) {
             let s2 = parseInt(s2Input?.value);
             if (isNaN(s1)) s1 = 0;
             if (isNaN(s2)) s2 = 0;
+            
+            let alargue = null;
+            if (esFaseFinal) {
+                const alargueRadios = document.querySelectorAll('input[name="alargue"]');
+                alargueRadios.forEach(r => {
+                    if (r.checked) alargue = r.value;
+                });
+            }
+            
             overlay.remove();
-            guardarPronostico(partido.id, s1, s2, pulsoAEnviar); 
+            guardarPronostico(partido.id, s1, s2, pulsoAEnviar, alargue); 
         };
     }
     
@@ -1246,7 +1435,7 @@ async function refrescarDatosPartidos() {
     mostrarToast('⟳ Actualizando partidos...', 'info');
     await cargarEquipos();
     await cargarPartidos();
-    await cargarPronosticos(currentJugador?.id);
+    await cargarPronosticos(currentJugador?.id, true);
     refrescarContenido();
     mostrarToast('✅ Partidos actualizados', 'ok');
 }
@@ -1266,7 +1455,15 @@ async function refrescarContenido() {
     const fechaSim = simGetFechaStr ? simGetFechaStr() : new Date().toISOString().split('T')[0];
     const horaSim = simGetHoraStr ? simGetHoraStr() : new Date().toTimeString().split(' ')[0].substring(0,5);
     
-    const partidosVisibles = partidosCache.filter(p => { const est = Number(p.est); return est >= 1 && est <= 4 && p.fas === 1; });
+    const faseMax = getFaseMaximaPorFecha(fechaSim);
+    console.log(`[Partidos] Fase máxima permitida para ${fechaSim}: ${faseMax}`);
+    
+    const partidosVisibles = partidosCache.filter(p => { 
+        const est = Number(p.est); 
+        return est >= 1 && est <= 4 && p.fas <= faseMax; 
+    });
+    
+    console.log(`[Partidos] ${partidosVisibles.length} partidos visibles (fas <= ${faseMax})`);
     const primerDia = obtenerPrimerDiaConPartidos(partidosVisibles);
     
     if (tabActivo === 'todos') {
@@ -1283,7 +1480,7 @@ async function refrescarContenido() {
         scrollAPrimerDestacado();
         
     } else if (tabActivo === 'grupos') {
-        const partidosGrupo = partidosVisibles.filter(p => p.grupoCalculado === grupoActivo);
+        const partidosGrupo = partidosVisibles.filter(p => p.grupoCalculado === grupoActivo && p.fas === 1);
         
         const cardsPromises = partidosGrupo.map(async (p) => {
             const fechaPartido = p.fch ? p.fch.split('T')[0] : '';
@@ -1367,7 +1564,7 @@ export async function renderizarPartidos(contenedor, datosCuenta, tabInicial = '
     
     await cargarEquipos();
     await cargarPartidos();
-    await cargarPronosticos(datosCuenta.id);
+    await cargarPronosticos(datosCuenta.id, true);
     
     const especialesData = cargarPronosticosEspecialesLocal();
     if (especialesData.grupos) {
