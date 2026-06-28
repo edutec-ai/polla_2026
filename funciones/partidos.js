@@ -24,6 +24,9 @@
 // - ✅ NUEVO: Modal carga pronóstico existente (inputs y selector de alargue)
 // - ✅ NUEVO: Modal de partido terminado con desglose de puntos
 // - ✅ NUEVO: Badge "MARCADOR 90 MINUTOS" debajo de la cancha en el modal
+// - ✅ NUEVO: SCROLL VERTICAL en modal (max-height: 90vh, overflow-y: auto)
+// - ✅ NUEVO: Tamaños reducidos en modal (banderas 40px, nombres 13px)
+// - ✅ NUEVO: Modal centrado verticalmente
 // - ✅ CORREGIDO: cargarPronosticos() LEE pro_res DE VELNEO
 // - ✅ CORREGIDO: obtenerPronosticoFresco() LEE pro_res DE VELNEO
 // - ✅ CORREGIDO: obtenerPronosticoActual() LEE pro_res DE VELNEO
@@ -1141,49 +1144,175 @@ function abrirModal(partido, fechaSim, horaSim) {
         }
         
         const overlay = document.createElement('div');
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:3000;display:flex;align-items:flex-end;justify-content:center;';
-        overlay.innerHTML = `<div style="background:#fff;border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;">
-            <div style="display:flex;justify-content:space-between;margin-bottom:16px;"><div style="font-size:17px;font-weight:700;">${partido.grp_for||'Fase '+partido.fas}</div><button id="cerrar-modal-btn" style="background:none;border:none;font-size:22px;">✕</button></div>
-            <div style="font-size:12px;color:#8e8e93;margin-bottom:20px;text-align:center;">${formatearFecha(partido.fch)} · ${formatearHora12h(partido.hor)}</div>
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:3000;display:flex;align-items:center;justify-content:center;';
+        overlay.innerHTML = `<div style="background:#fff;border-radius:20px;padding:16px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+            <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
+                <div style="font-size:17px;font-weight:700;">${partido.grp_for||'Fase '+partido.fas}</div>
+                <button id="cerrar-modal-btn" style="background:none;border:none;font-size:22px;cursor:pointer;">✕</button>
+            </div>
+            <div style="font-size:12px;color:#8e8e93;margin-bottom:16px;text-align:center;">${formatearFecha(partido.fch)} · ${formatearHora12h(partido.hor)}</div>
             
-            <div style="background:#f2f2f7;border-radius:14px;padding:16px;margin-bottom:16px;">
-                <div style="font-size:12px;color:#8e8e93;margin-bottom:12px;text-align:center;">📋 TU PRONÓSTICO</div>
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div style="text-align:center; flex:1;"><div style="font-size:40px; margin-bottom:4px;">${getBandera(partido.nom_loc)}</div><div style="font-size:12px;font-weight:600;">${partido.nom_loc}</div><div style="font-size:24px;font-weight:800;color:#007aff;margin-top:8px;">${pronosticoLocal}</div></div>
-                    <div style="font-size:20px; font-weight:700; color:#8e8e93;">VS</div>
-                    <div style="text-align:center; flex:1;"><div style="font-size:40px; margin-bottom:4px;">${getBandera(partido.nom_vis)}</div><div style="font-size:12px;font-weight:600;">${partido.nom_vis}</div><div style="font-size:24px;font-weight:800;color:#007aff;margin-top:8px;">${pronosticoVisita}</div></div>
+            <div style="background: linear-gradient(135deg, #0a2f1f 0%, #1a5a3a 100%); border-radius: 20px; padding: 12px; margin-bottom: 12px; position: relative; overflow: hidden;">
+                <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: repeating-linear-gradient(90deg, rgba(0,0,0,0.1) 0px, rgba(0,0,0,0.1) 2px, transparent 2px, transparent 20px); pointer-events: none;"></div>
+                <div style="position: absolute; top: 0; left: 0; width: 100%; height: 20%; background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 100%); pointer-events: none;"></div>
+                <div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 20%; background: linear-gradient(0deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 100%); pointer-events: none;"></div>
+                <div style="position: absolute; top: 50%; left: 50%; width: 80px; height: 80px; border: 2px solid rgba(255,255,255,0.15); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;"></div>
+                <div style="position: absolute; top: 0; left: 50%; width: 2px; height: 100%; background: rgba(255,255,255,0.15); transform: translateX(-50%); pointer-events: none;"></div>
+                <div style="position: absolute; top: 50%; left: 50%; width: 6px; height: 6px; background: rgba(255,255,255,0.3); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;"></div>
+                <div style="position: relative; z-index: 10; display:flex; justify-content:space-between; align-items:center;">
+                    <div style="text-align:center; flex:1;">
+                        <div style="font-size:40px; margin-bottom:2px;">${getBandera(partido.nom_loc)}</div>
+                        <div style="font-size:13px; font-weight:700; color:white; text-shadow: 0 1px 2px rgba(0,0,0,0.5);">${partido.nom_loc}</div>
+                    </div>
+                    <div style="font-size:18px; font-weight:700; color:white; text-shadow: 0 1px 2px rgba(0,0,0,0.5); padding:0 16px;">VS</div>
+                    <div style="text-align:center; flex:1;">
+                        <div style="font-size:40px; margin-bottom:2px;">${getBandera(partido.nom_vis)}</div>
+                        <div style="font-size:13px; font-weight:700; color:white; text-shadow: 0 1px 2px rgba(0,0,0,0.5);">${partido.nom_vis}</div>
+                    </div>
                 </div>
-                ${esFaseFinal && pronostico.pro_res === '1' ? `<div style="text-align:center;margin-top:8px;font-size:12px;color:#f1c40f;font-weight:600;">⭐ Avanza: ${partido.nom_loc}</div>` : ''}
-                ${esFaseFinal && pronostico.pro_res === '2' ? `<div style="text-align:center;margin-top:8px;font-size:12px;color:#f1c40f;font-weight:600;">⭐ Avanza: ${partido.nom_vis}</div>` : ''}
             </div>
             
-            <div style="background:#f9f9fb;border-radius:14px;padding:16px;margin-bottom:16px;">
-                <div style="font-size:12px;color:#8e8e93;margin-bottom:12px;text-align:center;">📋 RESULTADO REAL</div>
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div style="text-align:center; flex:1;"><div style="font-size:40px; margin-bottom:4px;">${getBandera(partido.nom_loc)}</div><div style="font-size:12px;font-weight:600;">${partido.nom_loc}</div><div style="font-size:24px;font-weight:800;color:#34c759;margin-top:8px;">${realLocal}</div></div>
-                    <div style="font-size:20px; font-weight:700; color:#8e8e93;">VS</div>
-                    <div style="text-align:center; flex:1;"><div style="font-size:40px; margin-bottom:4px;">${getBandera(partido.nom_vis)}</div><div style="font-size:12px;font-weight:600;">${partido.nom_vis}</div><div style="font-size:24px;font-weight:800;color:#34c759;margin-top:8px;">${realVisita}</div></div>
+            <div style="text-align:center;margin-bottom:10px;">
+                <span style="display:inline-block;background:#ffd60a;color:#1a1a2e;font-size:11px;font-weight:700;padding:2px 14px;border-radius:20px;letter-spacing:0.5px;">🟡 MARCADOR 90 MINUTOS</span>
+            </div>
+            
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px;">
+                <div style="flex:1; text-align:center;">
+                    <div style="display:flex; align-items:center; justify-content:center; gap:6px; background:#f9f9fb; border-radius:30px; padding:4px 8px;">
+                        <button id="modal-dec-loc" style="width:32px;height:32px;border-radius:16px;background:#fff;border:1px solid #e5e5ea;font-size:16px;font-weight:700;cursor:pointer; display:flex; align-items:center; justify-content:center;">−</button>
+                        <input id="modal-s1" type="text" inputmode="numeric" pattern="[0-9]*" value="${valorS1}" placeholder="-" style="width:40px;height:32px;text-align:center;font-size:16px;font-weight:700;border:1px solid #e5e5ea;border-radius:8px; background:#fff;">
+                        <button id="modal-inc-loc" style="width:32px;height:32px;border-radius:16px;background:#fff;border:1px solid #e5e5ea;font-size:16px;font-weight:700;cursor:pointer; display:flex; align-items:center; justify-content:center;">+</button>
+                    </div>
                 </div>
-                ${esFaseFinal && realGanador === 'empate' ? `<div style="text-align:center;margin-top:8px;font-size:12px;color:#34c759;font-weight:600;">⭐ Avanza: ${realLocal > realVisita ? partido.nom_loc : (realVisita > realLocal ? partido.nom_vis : 'Empate')}</div>` : ''}
+                <div style="flex:1; text-align:center;">
+                    <div style="display:flex; align-items:center; justify-content:center; gap:6px; background:#f9f9fb; border-radius:30px; padding:4px 8px;">
+                        <button id="modal-dec-vis" style="width:32px;height:32px;border-radius:16px;background:#fff;border:1px solid #e5e5ea;font-size:16px;font-weight:700;cursor:pointer; display:flex; align-items:center; justify-content:center;">−</button>
+                        <input id="modal-s2" type="text" inputmode="numeric" pattern="[0-9]*" value="${valorS2}" placeholder="-" style="width:40px;height:32px;text-align:center;font-size:16px;font-weight:700;border:1px solid #e5e5ea;border-radius:8px; background:#fff;">
+                        <button id="modal-inc-vis" style="width:32px;height:32px;border-radius:16px;background:#fff;border:1px solid #e5e5ea;font-size:16px;font-weight:700;cursor:pointer; display:flex; align-items:center; justify-content:center;">+</button>
+                    </div>
+                </div>
             </div>
             
-            <div style="background:#f2f2f7;border-radius:12px;padding:12px;margin-bottom:16px;">
-                <div style="font-size:11px;font-weight:700;margin-bottom:8px;">📊 TU PUNTUACIÓN</div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>🏆 Ganador / Empate</span><span style="color:${ganador>0?'#34c759':'#ff3b30'}">${ganador} pts</span> ${ganador>0 ? '✅' : '❌'}</div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>⚽ Gol local exacto</span><span style="color:${golLocal>0?'#34c759':'#ff3b30'}">${golLocal} pts</span> ${golLocal>0 ? '✅' : '❌'}</div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>⚽ Gol visita exacto</span><span style="color:${golVisita>0?'#34c759':'#ff3b30'}">${golVisita} pts</span> ${golVisita>0 ? '✅' : '❌'}</div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>📊 Diferencia de goles</span><span style="color:${diferencia>0?'#34c759':'#ff3b30'}">${diferencia} pts</span> ${diferencia>0 ? '✅' : '❌'}</div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>🔄 Marcador inverso</span><span style="color:${inverso>0?'#34c759':'#ff3b30'}">${inverso} pts</span> ${inverso>0 ? '✅' : '❌'}</div>
-                ${bonusAlargue > 0 ? `<div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>⭐ Bonus Alargue</span><span style="color:#f1c40f;font-weight:700;">${bonusAlargue} pts</span> ✅</div>` : ''}
-                <div style="height:1px;background:#e5e5ea;margin:8px 0;"></div>
-                <div style="display:flex;justify-content:space-between;"><span style="font-weight:700;">⭐ TOTAL</span><span style="color:#ff9500;font-weight:800;">${totalConPulso} pts</span></div>
-                ${pulsoHTML}
+            <div style="text-align:center;margin-bottom:10px;">
+                <div style="background:rgb(17,55,95);color:white;font-size:11px;font-weight:500;padding:4px 12px;border-radius:20px;display:inline-block;line-height:1.4;">
+                    ⚠️ Si tu pronóstico es 0-0<br>
+                    <span style="color:#ffd60a;">selecciona explícitamente 0 - 0</span>
+                </div>
             </div>
-            <button id="cerrar-modal-accion" style="width:100%;background:#007aff;color:#fff;border:none;border-radius:14px;padding:14px;font-size:16px;cursor:pointer;">Cerrar</button>
+            
+            ${esFaseFinal ? `
+            <div style="background:rgba(0,122,255,0.05);border:1px solid rgba(0,122,255,0.15);border-radius:12px;padding:12px;margin-bottom:12px;">
+                <div style="font-size:13px;font-weight:600;color:#007aff;text-align:center;margin-bottom:8px;">⚽ En caso de alargue, ¿quién avanza?</div>
+                <div style="display:flex;gap:12px;justify-content:center;">
+                    <label style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;padding:8px 16px;border-radius:10px;background:${alargueGuardado === 'local' ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.05)'};border:2px solid ${alargueGuardado === 'local' ? '#007aff' : 'rgba(0,122,255,0.15)'};transition:all 0.2s;min-width:80px;flex:1;max-width:130px;">
+                        <input type="radio" name="alargue" value="local" ${alargueGuardado === 'local' ? 'checked' : ''} style="accent-color:#007aff;width:16px;height:16px;margin-bottom:2px;">
+                        <span style="font-size:24px;line-height:1.2;">${getBandera(partido.nom_loc)}</span>
+                        <span style="font-size:12px;font-weight:600;text-align:center;">${partido.nom_loc || 'Local'}</span>
+                    </label>
+                    <label style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;padding:8px 16px;border-radius:10px;background:${alargueGuardado === 'visita' ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.05)'};border:2px solid ${alargueGuardado === 'visita' ? '#007aff' : 'rgba(0,122,255,0.15)'};transition:all 0.2s;min-width:80px;flex:1;max-width:130px;">
+                        <input type="radio" name="alargue" value="visita" ${alargueGuardado === 'visita' ? 'checked' : ''} style="accent-color:#007aff;width:16px;height:16px;margin-bottom:2px;">
+                        <span style="font-size:24px;line-height:1.2;">${getBandera(partido.nom_vis)}</span>
+                        <span style="font-size:12px;font-weight:600;text-align:center;">${partido.nom_vis || 'Visitante'}</span>
+                    </label>
+                </div>
+                <div style="font-size:11px;color:#007aff;text-align:center;margin-top:6px;font-weight:600;">⭐ Bonus Alargue: ${Math.round(ptsBase * 0.4)} pts si aciertas quién avanza</div>
+            </div>` : ''}
+            
+            <div style="background:#f2f2f7;border-radius:12px;padding:10px;margin-bottom:12px;">
+                <div style="font-size:13px;font-weight:700;margin-bottom:8px;">📋 Detalle de puntos</div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+                    <span style="font-size:12px;">🏆 Ganador / Empate</span>
+                    <span style="color:#34c759;font-weight:700;font-size:12px;">${Math.round(puntosBaseParaModal * 0.4)} pts</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+                    <span style="font-size:12px;">⚽ Gol local exacto</span>
+                    <span style="color:#34c759;font-weight:700;font-size:12px;">${Math.round(puntosBaseParaModal * 0.2)} pts</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+                    <span style="font-size:12px;">⚽ Gol visita exacto</span>
+                    <span style="color:#34c759;font-weight:700;font-size:12px;">${Math.round(puntosBaseParaModal * 0.2)} pts</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+                    <span style="font-size:12px;">📊 Diferencia de goles</span>
+                    <span style="color:#34c759;font-weight:700;font-size:12px;">${Math.round(puntosBaseParaModal * 0.2)} pts</span>
+                </div>
+                <div style="height:1px;background:#e5e5ea;margin:6px 0;"></div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
+                    <span style="font-weight:700;font-size:12px;">⭐ BASE</span>
+                    <span style="color:#ff9500;font-weight:800;font-size:12px;">${puntosBaseParaModal} pts</span>
+                </div>
+                ${esFaseFinal ? `
+                <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
+                    <span style="font-weight:700;font-size:12px;">⭐ Bonus Alargue</span>
+                    <span style="color:#f1c40f;font-weight:700;font-size:12px;">${Math.round(puntosBaseParaModal * 0.4)} pts</span>
+                </div>` : ''}
+            </div>
+            
+            <div style="background:#eafaf1;border-radius:10px;padding:8px;margin-bottom:12px;text-align:center;">
+                <span style="color:#1e8449;font-size:12px;font-weight:600;">${mensajePulso}</span>
+            </div>
+            
+            <button id="modal-guardar-btn" style="width:100%;background:#34c759;color:#fff;border:none;border-radius:14px;padding:12px;font-weight:700;cursor:pointer;font-size:15px;">💾 Guardar pronóstico</button>
         </div>`;
         document.body.appendChild(overlay);
         document.getElementById('cerrar-modal-btn')?.addEventListener('click', () => overlay.remove());
-        document.getElementById('cerrar-modal-accion')?.addEventListener('click', () => overlay.remove());
+        
+        const s1Input = document.getElementById('modal-s1');
+        const s2Input = document.getElementById('modal-s2');
+        const guardarBtn = document.getElementById('modal-guardar-btn');
+        
+        document.getElementById('modal-inc-loc')?.addEventListener('click', () => { 
+            if (s1Input) {
+                let val = parseInt(s1Input.value);
+                if (isNaN(val)) val = 0;
+                s1Input.value = Math.min(20, val + 1);
+            }
+        });
+        document.getElementById('modal-dec-loc')?.addEventListener('click', () => { 
+            if (s1Input) {
+                let val = parseInt(s1Input.value);
+                if (isNaN(val)) val = 0;
+                s1Input.value = Math.max(0, val - 1);
+            }
+        });
+        document.getElementById('modal-inc-vis')?.addEventListener('click', () => { 
+            if (s2Input) {
+                let val = parseInt(s2Input.value);
+                if (isNaN(val)) val = 0;
+                s2Input.value = Math.min(20, val + 1);
+            }
+        });
+        document.getElementById('modal-dec-vis')?.addEventListener('click', () => { 
+            if (s2Input) {
+                let val = parseInt(s2Input.value);
+                if (isNaN(val)) val = 0;
+                s2Input.value = Math.max(0, val - 1);
+            }
+        });
+        
+        validarInputNumerico(s1Input);
+        validarInputNumerico(s2Input);
+        
+        if (guardarBtn) {
+            guardarBtn.onclick = () => { 
+                let s1 = parseInt(s1Input?.value);
+                let s2 = parseInt(s2Input?.value);
+                if (isNaN(s1)) s1 = 0;
+                if (isNaN(s2)) s2 = 0;
+                
+                let alargue = null;
+                if (esFaseFinal) {
+                    const alargueRadios = document.querySelectorAll('input[name="alargue"]');
+                    alargueRadios.forEach(r => {
+                        if (r.checked) alargue = r.value;
+                    });
+                }
+                
+                overlay.remove();
+                guardarPronostico(partido.id, s1, s2, pulsoAEnviar, alargue); 
+            };
+        }
+        
         overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
         return;
     }
@@ -1220,7 +1349,7 @@ function abrirModal(partido, fechaSim, horaSim) {
     }
     
     const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:3000;display:flex;align-items:flex-end;justify-content:center;';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:3000;display:flex;align-items:center;justify-content:center;';
     
     const tienePronosticoGuardado = tienePronostico;
     const valorS1 = tienePronosticoGuardado ? pronostico.s1 : '';
@@ -1230,14 +1359,14 @@ function abrirModal(partido, fechaSim, horaSim) {
     
     // ========== BADGE "MARCADOR 90 MINUTOS" ==========
     let badge90HTML = `
-        <div style="text-align: center; margin-bottom: 12px;">
+        <div style="text-align: center; margin-bottom: 10px;">
             <span style="
                 display: inline-block;
                 background: #ffd60a;
                 color: #1a1a2e;
                 font-size: 11px;
                 font-weight: 700;
-                padding: 3px 14px;
+                padding: 2px 14px;
                 border-radius: 20px;
                 letter-spacing: 0.5px;
             ">
@@ -1248,8 +1377,8 @@ function abrirModal(partido, fechaSim, horaSim) {
     
     // ========== BADGE 0-0 ==========
     let badgeZeroHTML = `
-        <div style="text-align: center; margin-bottom: 12px;">
-            <div style="background:rgb(17, 55, 95); color: white; font-size: 12px; font-weight: 500; padding: 6px 14px; border-radius: 20px; display: inline-block; line-height: 1.4;">
+        <div style="text-align: center; margin-bottom: 10px;">
+            <div style="background:rgb(17, 55, 95); color: white; font-size: 11px; font-weight: 500; padding: 4px 12px; border-radius: 20px; display: inline-block; line-height: 1.4;">
                 ⚠️ Si tu pronóstico es 0-0<br>
                 <span style="color: #ffd60a;">selecciona explícitamente 0 - 0</span>
             </div>
@@ -1263,65 +1392,71 @@ function abrirModal(partido, fechaSim, horaSim) {
         const checkedLocal = (alargueGuardado === 'local') ? 'checked' : '';
         const checkedVisita = (alargueGuardado === 'visita') ? 'checked' : '';
         alargueHTML = `
-            <div style="background: rgba(0, 122, 255, 0.05); border: 1px solid rgba(0, 122, 255, 0.15); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
-                <div style="font-size: 14px; font-weight: 600; color: #007aff; text-align: center; margin-bottom: 12px;">
+            <div style="background: rgba(0, 122, 255, 0.05); border: 1px solid rgba(0, 122, 255, 0.15); border-radius: 12px; padding: 12px; margin-bottom: 12px;">
+                <div style="font-size: 13px; font-weight: 600; color: #007aff; text-align: center; margin-bottom: 8px;">
                     ⚽ En caso de alargue, ¿quién avanza?
                 </div>
-                <div style="display: flex; gap: 16px; justify-content: center;">
-                    <label style="display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; padding: 12px 24px; border-radius: 12px; background: ${alargueGuardado === 'local' ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.05)'}; border: 2px solid ${alargueGuardado === 'local' ? '#007aff' : 'rgba(0,122,255,0.15)'}; transition: all 0.2s; min-width: 100px; flex:1; max-width: 160px;">
-                        <input type="radio" name="alargue" value="local" ${checkedLocal} style="accent-color: #007aff; width: 18px; height: 18px; margin-bottom: 4px;">
-                        <span style="font-size: 28px; line-height: 1.2;">${getBandera(partido.nom_loc)}</span>
-                        <span style="font-size: 15px; font-weight: 600; text-align: center;">${partido.nom_loc || 'Local'}</span>
+                <div style="display: flex; gap: 12px; justify-content: center;">
+                    <label style="display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; padding: 8px 16px; border-radius: 10px; background: ${alargueGuardado === 'local' ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.05)'}; border: 2px solid ${alargueGuardado === 'local' ? '#007aff' : 'rgba(0,122,255,0.15)'}; transition: all 0.2s; min-width: 80px; flex:1; max-width: 130px;">
+                        <input type="radio" name="alargue" value="local" ${checkedLocal} style="accent-color: #007aff; width: 16px; height: 16px; margin-bottom: 2px;">
+                        <span style="font-size: 24px; line-height: 1.2;">${getBandera(partido.nom_loc)}</span>
+                        <span style="font-size: 12px; font-weight: 600; text-align: center;">${partido.nom_loc || 'Local'}</span>
                     </label>
-                    <label style="display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; padding: 12px 24px; border-radius: 12px; background: ${alargueGuardado === 'visita' ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.05)'}; border: 2px solid ${alargueGuardado === 'visita' ? '#007aff' : 'rgba(0,122,255,0.15)'}; transition: all 0.2s; min-width: 100px; flex:1; max-width: 160px;">
-                        <input type="radio" name="alargue" value="visita" ${checkedVisita} style="accent-color: #007aff; width: 18px; height: 18px; margin-bottom: 4px;">
-                        <span style="font-size: 28px; line-height: 1.2;">${getBandera(partido.nom_vis)}</span>
-                        <span style="font-size: 15px; font-weight: 600; text-align: center;">${partido.nom_vis || 'Visitante'}</span>
+                    <label style="display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; padding: 8px 16px; border-radius: 10px; background: ${alargueGuardado === 'visita' ? 'rgba(0,122,255,0.15)' : 'rgba(255,255,255,0.05)'}; border: 2px solid ${alargueGuardado === 'visita' ? '#007aff' : 'rgba(0,122,255,0.15)'}; transition: all 0.2s; min-width: 80px; flex:1; max-width: 130px;">
+                        <input type="radio" name="alargue" value="visita" ${checkedVisita} style="accent-color: #007aff; width: 16px; height: 16px; margin-bottom: 2px;">
+                        <span style="font-size: 24px; line-height: 1.2;">${getBandera(partido.nom_vis)}</span>
+                        <span style="font-size: 12px; font-weight: 600; text-align: center;">${partido.nom_vis || 'Visitante'}</span>
                     </label>
                 </div>
-                <div style="font-size: 12px; color: #007aff; text-align: center; margin-top: 10px; font-weight: 600;">
+                <div style="font-size: 11px; color: #007aff; text-align: center; margin-top: 6px; font-weight: 600;">
                     ⭐ Bonus Alargue: ${bonusAlargueVal} pts si aciertas quién avanza
                 </div>
             </div>
         `;
     }
     
-    overlay.innerHTML = `<div style="background:#fff;border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;">
-        <div style="display:flex;justify-content:space-between;margin-bottom:16px;">
+    overlay.innerHTML = `<div style="background:#fff;border-radius:20px;padding:16px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+        <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
             <div style="font-size:17px;font-weight:700;">${partido.grp_for||'Fase '+partido.fas}</div>
-            <button id="cerrar-modal-btn" style="background:none;border:none;font-size:22px;">✕</button>
+            <button id="cerrar-modal-btn" style="background:none;border:none;font-size:22px;cursor:pointer;">✕</button>
         </div>
-        <div style="font-size:12px;color:#8e8e93;margin-bottom:20px;text-align:center;">${formatearFecha(partido.fch)} · ${formatearHora12h(partido.hor)}</div>
+        <div style="font-size:12px;color:#8e8e93;margin-bottom:16px;text-align:center;">${formatearFecha(partido.fch)} · ${formatearHora12h(partido.hor)}</div>
         
-        <div style="background: linear-gradient(135deg, #0a2f1f 0%, #1a5a3a 100%); border-radius: 20px; padding: 16px; margin-bottom: 16px; position: relative; overflow: hidden;">
+        <div style="background: linear-gradient(135deg, #0a2f1f 0%, #1a5a3a 100%); border-radius: 20px; padding: 12px; margin-bottom: 12px; position: relative; overflow: hidden;">
             <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: repeating-linear-gradient(90deg, rgba(0,0,0,0.1) 0px, rgba(0,0,0,0.1) 2px, transparent 2px, transparent 20px); pointer-events: none;"></div>
             <div style="position: absolute; top: 0; left: 0; width: 100%; height: 20%; background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 100%); pointer-events: none;"></div>
             <div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 20%; background: linear-gradient(0deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 100%); pointer-events: none;"></div>
-            <div style="position: absolute; top: 50%; left: 50%; width: 100px; height: 100px; border: 2px solid rgba(255,255,255,0.15); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;"></div>
+            <div style="position: absolute; top: 50%; left: 50%; width: 80px; height: 80px; border: 2px solid rgba(255,255,255,0.15); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;"></div>
             <div style="position: absolute; top: 0; left: 50%; width: 2px; height: 100%; background: rgba(255,255,255,0.15); transform: translateX(-50%); pointer-events: none;"></div>
             <div style="position: absolute; top: 50%; left: 50%; width: 6px; height: 6px; background: rgba(255,255,255,0.3); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none;"></div>
             <div style="position: relative; z-index: 10; display:flex; justify-content:space-between; align-items:center;">
-                <div style="text-align:center; flex:1;"><div style="font-size:56px; margin-bottom:8px;">${getBandera(partido.nom_loc)}</div><div style="font-size:15px; font-weight:700; color:white; text-shadow: 0 1px 2px rgba(0,0,0,0.5);">${partido.nom_loc}</div></div>
-                <div style="font-size:18px; font-weight:700; color:white; text-shadow: 0 1px 2px rgba(0,0,0,0.5); padding:0 20px;">VS</div>
-                <div style="text-align:center; flex:1;"><div style="font-size:56px; margin-bottom:8px;">${getBandera(partido.nom_vis)}</div><div style="font-size:15px; font-weight:700; color:white; text-shadow: 0 1px 2px rgba(0,0,0,0.5);">${partido.nom_vis}</div></div>
+                <div style="text-align:center; flex:1;">
+                    <div style="font-size:40px; margin-bottom:2px;">${getBandera(partido.nom_loc)}</div>
+                    <div style="font-size:13px; font-weight:700; color:white; text-shadow: 0 1px 2px rgba(0,0,0,0.5);">${partido.nom_loc}</div>
+                </div>
+                <div style="font-size:18px; font-weight:700; color:white; text-shadow: 0 1px 2px rgba(0,0,0,0.5); padding:0 16px;">VS</div>
+                <div style="text-align:center; flex:1;">
+                    <div style="font-size:40px; margin-bottom:2px;">${getBandera(partido.nom_vis)}</div>
+                    <div style="font-size:13px; font-weight:700; color:white; text-shadow: 0 1px 2px rgba(0,0,0,0.5);">${partido.nom_vis}</div>
+                </div>
             </div>
         </div>
         
         ${badge90HTML}
         
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px;">
             <div style="flex:1; text-align:center;">
-                <div style="display:flex; align-items:center; justify-content:center; gap:8px; background:#f9f9fb; border-radius:30px; padding:6px 10px;">
-                    <button id="modal-dec-loc" style="width:36px;height:36px;border-radius:18px;background:#fff;border:1px solid #e5e5ea;font-size:18px;font-weight:700;cursor:pointer; display:flex; align-items:center; justify-content:center;">−</button>
-                    <input id="modal-s1" type="text" inputmode="numeric" pattern="[0-9]*" value="${valorS1}" placeholder="-" style="width:44px;height:36px;text-align:center;font-size:17px;font-weight:700;border:1px solid #e5e5ea;border-radius:10px; background:#fff;">
-                    <button id="modal-inc-loc" style="width:36px;height:36px;border-radius:18px;background:#fff;border:1px solid #e5e5ea;font-size:18px;font-weight:700;cursor:pointer; display:flex; align-items:center; justify-content:center;">+</button>
+                <div style="display:flex; align-items:center; justify-content:center; gap:6px; background:#f9f9fb; border-radius:30px; padding:4px 8px;">
+                    <button id="modal-dec-loc" style="width:32px;height:32px;border-radius:16px;background:#fff;border:1px solid #e5e5ea;font-size:16px;font-weight:700;cursor:pointer; display:flex; align-items:center; justify-content:center;">−</button>
+                    <input id="modal-s1" type="text" inputmode="numeric" pattern="[0-9]*" value="${valorS1}" placeholder="-" style="width:40px;height:32px;text-align:center;font-size:16px;font-weight:700;border:1px solid #e5e5ea;border-radius:8px; background:#fff;">
+                    <button id="modal-inc-loc" style="width:32px;height:32px;border-radius:16px;background:#fff;border:1px solid #e5e5ea;font-size:16px;font-weight:700;cursor:pointer; display:flex; align-items:center; justify-content:center;">+</button>
                 </div>
             </div>
             <div style="flex:1; text-align:center;">
-                <div style="display:flex; align-items:center; justify-content:center; gap:8px; background:#f9f9fb; border-radius:30px; padding:6px 10px;">
-                    <button id="modal-dec-vis" style="width:36px;height:36px;border-radius:18px;background:#fff;border:1px solid #e5e5ea;font-size:18px;font-weight:700;cursor:pointer; display:flex; align-items:center; justify-content:center;">−</button>
-                    <input id="modal-s2" type="text" inputmode="numeric" pattern="[0-9]*" value="${valorS2}" placeholder="-" style="width:44px;height:36px;text-align:center;font-size:17px;font-weight:700;border:1px solid #e5e5ea;border-radius:10px; background:#fff;">
-                    <button id="modal-inc-vis" style="width:36px;height:36px;border-radius:18px;background:#fff;border:1px solid #e5e5ea;font-size:18px;font-weight:700;cursor:pointer; display:flex; align-items:center; justify-content:center;">+</button>
+                <div style="display:flex; align-items:center; justify-content:center; gap:6px; background:#f9f9fb; border-radius:30px; padding:4px 8px;">
+                    <button id="modal-dec-vis" style="width:32px;height:32px;border-radius:16px;background:#fff;border:1px solid #e5e5ea;font-size:16px;font-weight:700;cursor:pointer; display:flex; align-items:center; justify-content:center;">−</button>
+                    <input id="modal-s2" type="text" inputmode="numeric" pattern="[0-9]*" value="${valorS2}" placeholder="-" style="width:40px;height:32px;text-align:center;font-size:16px;font-weight:700;border:1px solid #e5e5ea;border-radius:8px; background:#fff;">
+                    <button id="modal-inc-vis" style="width:32px;height:32px;border-radius:16px;background:#fff;border:1px solid #e5e5ea;font-size:16px;font-weight:700;cursor:pointer; display:flex; align-items:center; justify-content:center;">+</button>
                 </div>
             </div>
         </div>
@@ -1329,43 +1464,41 @@ function abrirModal(partido, fechaSim, horaSim) {
         ${badgeZeroHTML}
         ${alargueHTML}
         
-        <div style="background:#f2f2f7;border-radius:12px;padding:12px;margin-bottom:16px;">
-            <div style="font-size:14px;font-weight:700;margin-bottom:12px;">📋 Detalle de puntos</div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                <span>🏆 Ganador / Empate</span>
-                <span style="color:#34c759;font-weight:700;">${Math.round(puntosBaseParaModal * 0.4)} pts</span>
+        <div style="background:#f2f2f7;border-radius:12px;padding:10px;margin-bottom:12px;">
+            <div style="font-size:13px;font-weight:700;margin-bottom:8px;">📋 Detalle de puntos</div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+                <span style="font-size:12px;">🏆 Ganador / Empate</span>
+                <span style="color:#34c759;font-weight:700;font-size:12px;">${Math.round(puntosBaseParaModal * 0.4)} pts</span>
             </div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                <span>⚽ Gol local exacto</span>
-                <span style="color:#34c759;font-weight:700;">${Math.round(puntosBaseParaModal * 0.2)} pts</span>
+            <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+                <span style="font-size:12px;">⚽ Gol local exacto</span>
+                <span style="color:#34c759;font-weight:700;font-size:12px;">${Math.round(puntosBaseParaModal * 0.2)} pts</span>
             </div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                <span>⚽ Gol visita exacto</span>
-                <span style="color:#34c759;font-weight:700;">${Math.round(puntosBaseParaModal * 0.2)} pts</span>
+            <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+                <span style="font-size:12px;">⚽ Gol visita exacto</span>
+                <span style="color:#34c759;font-weight:700;font-size:12px;">${Math.round(puntosBaseParaModal * 0.2)} pts</span>
             </div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                <span>📊 Diferencia de goles</span>
-                <span style="color:#34c759;font-weight:700;">${Math.round(puntosBaseParaModal * 0.2)} pts</span>
+            <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+                <span style="font-size:12px;">📊 Diferencia de goles</span>
+                <span style="color:#34c759;font-weight:700;font-size:12px;">${Math.round(puntosBaseParaModal * 0.2)} pts</span>
             </div>
-            <div style="height:1px;background:#e5e5ea;margin:8px 0;"></div>
-            
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                <span style="font-weight:700;">⭐ BASE</span>
-                <span style="color:#ff9500;font-weight:800;">${puntosBaseParaModal} pts</span>
+            <div style="height:1px;background:#e5e5ea;margin:6px 0;"></div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
+                <span style="font-weight:700;font-size:12px;">⭐ BASE</span>
+                <span style="color:#ff9500;font-weight:800;font-size:12px;">${puntosBaseParaModal} pts</span>
             </div>
-            
             ${esFaseFinal ? `
-            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                <span style="font-weight:700;">⭐ Bonus Alargue</span>
-                <span style="color:#f1c40f;font-weight:700;">${Math.round(puntosBaseParaModal * 0.4)} pts</span>
+            <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
+                <span style="font-weight:700;font-size:12px;">⭐ Bonus Alargue</span>
+                <span style="color:#f1c40f;font-weight:700;font-size:12px;">${Math.round(puntosBaseParaModal * 0.4)} pts</span>
             </div>` : ''}
         </div>
         
-        <div style="background:#eafaf1;border-radius:12px;padding:12px;margin-bottom:16px;text-align:center;">
-            <span style="color:#1e8449;font-size:13px;font-weight:600;">${mensajePulso}</span>
+        <div style="background:#eafaf1;border-radius:10px;padding:8px;margin-bottom:12px;text-align:center;">
+            <span style="color:#1e8449;font-size:12px;font-weight:600;">${mensajePulso}</span>
         </div>
         
-        <button id="modal-guardar-btn" style="width:100%;background:#34c759;color:#fff;border:none;border-radius:14px;padding:14px;font-weight:700;cursor:pointer;">💾 Guardar pronóstico</button>
+        <button id="modal-guardar-btn" style="width:100%;background:#34c759;color:#fff;border:none;border-radius:14px;padding:12px;font-weight:700;cursor:pointer;font-size:15px;">💾 Guardar pronóstico</button>
     </div>`;
     
     document.body.appendChild(overlay);
