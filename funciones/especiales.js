@@ -1,8 +1,10 @@
 // funciones/especiales.js
-// Módulo de Apuestas Especiales - VERSIÓN FINAL CON BLOQUEO DE CICLO 1
+// Módulo de Apuestas Especiales - VERSIÓN FINAL CON BLOQUEO DE CICLO 1 Y CICLO 2
 // - Exporta gruposSeleccion para compatibilidad con partidos.js
-// - CICLO 1 se bloquea automáticamente después del partido inaugural
+// - CICLO 1 se bloquea automáticamente después del partido inaugural (11/06 2:00 PM)
+// - CICLO 2 se bloquea automáticamente después del inicio de 16avos (28/06 2:00 PM)
 // - Cuando está bloqueado: dropdowns deshabilitados, botón guardar oculto
+// - Badges de estado: PULSO 100, PULSO 50, CERRADO
 
 import { onSimuladorCambio, simGetFechaStr, simGetHoraStr } from './lab.js';
 import { getBandera, getNombreVisual } from './banderas.js';
@@ -237,6 +239,7 @@ function actualizarEstadoVentanas() {
   estadoVentanas.fechaActual = fechaSim;
   estadoVentanas.horaActual = horaSim;
   
+  // ========== CICLO 1 ==========
   let ciclo1Bloqueado = false;
   if (fechaSim > FECHA_INAUGURAL) {
     ciclo1Bloqueado = true;
@@ -245,6 +248,7 @@ function actualizarEstadoVentanas() {
   }
   estadoVentanas.ciclo1Bloqueado = ciclo1Bloqueado;
   
+  // ========== CICLO 2 ==========
   let ciclo2Pulso = 100;
   let ciclo2Bloqueado = false;
   
@@ -265,7 +269,7 @@ function actualizarEstadoVentanas() {
   estadoVentanas.ciclo2Pulso = ciclo2Pulso;
   estadoVentanas.ciclo2Bloqueado = ciclo2Bloqueado;
   
-  console.log('[Especiales] Ventanas actualizadas - ciclo1Bloqueado:', ciclo1Bloqueado);
+  console.log('[Especiales] Ventanas actualizadas - ciclo1Bloqueado:', ciclo1Bloqueado, 'ciclo2Bloqueado:', ciclo2Bloqueado);
 }
 
 function getBadgePulsoHTML() {
@@ -471,7 +475,7 @@ function validarSeleccionFinalista(key, valor) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// 5. RENDERIZADO DE SELECCIONADORES (CON BLOQUEO)
+// 5. RENDERIZADO DE SELECCIONADORES
 // ─────────────────────────────────────────────────────────────
 
 function renderGrupoSelector(grupo) {
@@ -505,19 +509,19 @@ function renderGrupoSelector(grupo) {
         
         <div class="esp-posicion-row">
           <div class="esp-posicion-label">1°</div>
-          <div class="esp-selector-disabled" style="background:#f2f2f7; border-radius:12px; padding:12px 14px; color:#8e8e93;">
+          <div class="esp-selector-disabled" style="background:#f2f2f7; border-radius:12px; padding:12px 14px; color:#8e8e93; text-align:center;">
             ${valor1}
           </div>
         </div>
         
         <div class="esp-posicion-row">
           <div class="esp-posicion-label">2°</div>
-          <div class="esp-selector-disabled" style="background:#f2f2f7; border-radius:12px; padding:12px 14px; color:#8e8e93;">
+          <div class="esp-selector-disabled" style="background:#f2f2f7; border-radius:12px; padding:12px 14px; color:#8e8e93; text-align:center;">
             ${valor2}
           </div>
         </div>
         
-        <div style="margin-top:12px; text-align:center; font-size:11px; color:#ff3b30;">
+        <div style="margin-top:12px; text-align:center; font-size:11px; color:#ff3b30; font-weight:600;">
           🔒 Ciclo cerrado · No se aceptan más pronósticos
         </div>
       </div>
@@ -569,10 +573,30 @@ function renderGrupoSelector(grupo) {
   `;
 }
 
-function renderFinalistaSelector(titulo, key, pts, icon) {
+function renderFinalistaSelector(titulo, key, pts, icon, bloqueado = false) {
   const valor = finalistasSeleccion[key];
   const equipos = equiposCache.filter(e => e.name !== 'Playoff UEFA').map(e => e.name);
   
+  // MODO BLOQUEADO - Solo muestra valores, sin interactividad
+  if (bloqueado) {
+    const valorDisplay = valor ? getBandera(valor) + ' ' + getNombreVisual(valor) : '<span style="color:#ff3b30;">❌ No seleccionado</span>';
+    return `
+      <div class="esp-finalista-card" style="opacity:0.85;">
+        <div class="esp-finalista-header">
+          <span class="esp-finalista-titulo">${icon} ${titulo}</span>
+          <span class="esp-finalista-pts">${pts} pts</span>
+        </div>
+        <div style="background:#f2f2f7; border-radius:12px; padding:12px 14px; color:#1c1c1e; text-align:center; font-weight:600;">
+          ${valorDisplay}
+        </div>
+        <div style="margin-top:8px; text-align:center; font-size:11px; color:#ff3b30; font-weight:600;">
+          🔒 Ciclo cerrado · No se aceptan más pronósticos
+        </div>
+      </div>
+    `;
+  }
+  
+  // MODO ACTIVO (EDITABLE)
   return `
     <div class="esp-finalista-card">
       <div class="esp-finalista-header">
@@ -640,7 +664,6 @@ function renderCiclo1Content() {
           `}
         </div>
         
-        <!-- TABLA 2 COLUMNAS: PUNTOS + BOTÓN GUARDAR (oculto si está bloqueado) -->
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
           <div style="flex: 1; text-align: left;">
             <div>• Si acierta en el orden: <span style="background:#ffcc00; color:#1c1c1e; padding:2px 8px; border-radius:12px; font-weight:700;">60 pts</span></div>
@@ -676,14 +699,42 @@ function renderCiclo1Content() {
 }
 
 function renderCiclo2Content() {
+  const bloqueado = estadoVentanas.ciclo2Bloqueado === true;
+  const pulso = estadoVentanas.ciclo2Pulso;
+  
+  // Badge de estado
+  let badgeHTML = '';
+  if (bloqueado) {
+    badgeHTML = `
+      <div style="background:#fff2f2; border:1px solid #ffd0d0; border-radius:12px; padding:10px 14px; margin-bottom:12px; text-align:center;">
+        <span style="color:#c0392b; font-weight:700; font-size:13px;">🔒 CICLO 2 CERRADO</span>
+        <span style="color:#c0392b; font-size:11px; display:block; margin-top:2px;">No se aceptan más pronósticos de finalistas</span>
+      </div>
+    `;
+  } else if (pulso === 50) {
+    badgeHTML = `
+      <div style="background:#fff9ec; border:1px solid #ffd080; border-radius:12px; padding:10px 14px; margin-bottom:12px; text-align:center;">
+        <span style="color:#c05a00; font-weight:700; font-size:13px;">🟡 PULSO 50</span>
+        <span style="color:#c05a00; font-size:11px; display:block; margin-top:2px;">Puntos reducidos a la mitad</span>
+      </div>
+    `;
+  } else {
+    badgeHTML = `
+      <div style="background:#eafaf1; border:1px solid #a9dfbf; border-radius:12px; padding:10px 14px; margin-bottom:12px; text-align:center;">
+        <span style="color:#1e8449; font-weight:700; font-size:13px;">🟢 PULSO 100</span>
+        <span style="color:#1e8449; font-size:11px; display:block; margin-top:2px;">Puntos completos</span>
+      </div>
+    `;
+  }
+  
   return `
     <div>
+      ${badgeHTML}
+      
       <div style="background: #f2f2f7; border-radius: 16px; padding: 12px 16px; margin-bottom: 12px;">
         <strong style="display:block; margin-bottom:4px; font-size:16px; color:#8B0000;">LOS CUATRO FINALISTAS</strong>
-        <div id="pulso-inline" style="margin-bottom:8px;">${getBadgePulsoHTML()}</div>
         
-        <!-- TABLA 2 COLUMNAS: PUNTOS + BOTÓN GUARDAR -->
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top:8px;">
           <div style="flex: 1; text-align: left;">
             <div>• Campeón: <strong>720 pts</strong></div>
             <div>• Subcampeón: <strong>360 pts</strong></div>
@@ -691,19 +742,26 @@ function renderCiclo2Content() {
             <div>• Cuarto puesto: <strong>90 pts</strong></div>
           </div>
           <div>
-            <button id="btn-guardar-ciclo2" style="background: #34c759; color: white; border: none; border-radius: 14px; padding: 8px 16px; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; flex-direction: column; align-items: center; line-height: 1.3;">
-              <span>💾 Guardar</span>
-              <span>Ciclo 2</span>
-            </button>
+            ${!bloqueado ? `
+              <button id="btn-guardar-ciclo2" style="background: #34c759; color: white; border: none; border-radius: 14px; padding: 8px 16px; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; flex-direction: column; align-items: center; line-height: 1.3;">
+                <span>💾 Guardar</span>
+                <span>Ciclo 2</span>
+              </button>
+            ` : `
+              <div style="background: #8e8e93; color: white; border-radius: 14px; padding: 8px 16px; font-size: 13px; font-weight: 700; display: flex; flex-direction: column; align-items: center; line-height: 1.3; opacity: 0.6; cursor: not-allowed;">
+                <span>🔒 Cerrado</span>
+                <span>Ciclo 2</span>
+              </div>
+            `}
           </div>
         </div>
       </div>
       
       <div id="esp-finalistas-container">
-        ${renderFinalistaSelector('🥇 Campeón', 'campeon', '720', '🏆')}
-        ${renderFinalistaSelector('🥈 Subcampeón', 'subcampeon', '360', '🥈')}
-        ${renderFinalistaSelector('🥉 Tercer puesto', 'tercero', '180', '🥉')}
-        ${renderFinalistaSelector('4° Cuarto puesto', 'cuarto', '90', '4️⃣')}
+        ${renderFinalistaSelector('🥇 Campeón', 'campeon', '720', '🏆', bloqueado)}
+        ${renderFinalistaSelector('🥈 Subcampeón', 'subcampeon', '360', '🥈', bloqueado)}
+        ${renderFinalistaSelector('🥉 Tercer puesto', 'tercero', '180', '🥉', bloqueado)}
+        ${renderFinalistaSelector('4° Cuarto puesto', 'cuarto', '90', '4️⃣', bloqueado)}
       </div>
     </div>
   `;
@@ -863,39 +921,41 @@ function setupEventListeners() {
     });
   }
   
-  // Selectores de finalistas (siempre activos)
-  document.querySelectorAll('.esp-selector[data-finalista]').forEach(selector => {
-    const btn = selector.querySelector('.esp-selector-btn');
-    const dropdown = selector.querySelector('.esp-dropdown-menu');
-    const finalistaKey = selector.dataset.finalista;
-    
-    if (btn && dropdown) {
-      const newBtn = btn.cloneNode(true);
-      btn.parentNode.replaceChild(newBtn, btn);
+  // Selectores de finalistas (solo se agregan si no está bloqueado)
+  if (!estadoVentanas.ciclo2Bloqueado) {
+    document.querySelectorAll('.esp-selector[data-finalista]').forEach(selector => {
+      const btn = selector.querySelector('.esp-selector-btn');
+      const dropdown = selector.querySelector('.esp-dropdown-menu');
+      const finalistaKey = selector.dataset.finalista;
       
-      newBtn.onclick = (e) => {
-        e.stopPropagation();
-        cerrarTodosDropdowns();
-        dropdown.classList.add('open');
-        console.log(`[Especiales] Abriendo dropdown Finalista: ${finalistaKey}`);
-      };
-      
-      dropdown.querySelectorAll('.esp-dropdown-item').forEach(item => {
-        const newItem = item.cloneNode(true);
-        item.parentNode.replaceChild(newItem, item);
+      if (btn && dropdown) {
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
         
-        newItem.onclick = (e) => {
+        newBtn.onclick = (e) => {
           e.stopPropagation();
-          const valor = newItem.dataset.value;
-          if (!newItem.classList.contains('used') || newItem.classList.contains('selected')) {
-            console.log(`[Especiales] Seleccionado Finalista: ${finalistaKey} = ${valor}`);
-            seleccionarFinalista(finalistaKey, valor);
-            cerrarTodosDropdowns();
-          }
+          cerrarTodosDropdowns();
+          dropdown.classList.add('open');
+          console.log(`[Especiales] Abriendo dropdown Finalista: ${finalistaKey}`);
         };
-      });
-    }
-  });
+        
+        dropdown.querySelectorAll('.esp-dropdown-item').forEach(item => {
+          const newItem = item.cloneNode(true);
+          item.parentNode.replaceChild(newItem, item);
+          
+          newItem.onclick = (e) => {
+            e.stopPropagation();
+            const valor = newItem.dataset.value;
+            if (!newItem.classList.contains('used') || newItem.classList.contains('selected')) {
+              console.log(`[Especiales] Seleccionado Finalista: ${finalistaKey} = ${valor}`);
+              seleccionarFinalista(finalistaKey, valor);
+              cerrarTodosDropdowns();
+            }
+          };
+        });
+      }
+    });
+  }
   
   // ========== BOTÓN GUARDAR CICLO 1 ==========
   if (!estadoVentanas.ciclo1Bloqueado) {
@@ -911,14 +971,16 @@ function setupEventListeners() {
   }
   
   // ========== BOTÓN GUARDAR CICLO 2 ==========
-  const btnGuardarCiclo2 = document.getElementById('btn-guardar-ciclo2');
-  if (btnGuardarCiclo2) {
-    const newBtn = btnGuardarCiclo2.cloneNode(true);
-    btnGuardarCiclo2.parentNode.replaceChild(newBtn, btnGuardarCiclo2);
-    
-    newBtn.onclick = () => {
-      mostrarModalConfirmacionCiclo2(() => guardarEspecialesPorCiclo('ciclo2'));
-    };
+  if (!estadoVentanas.ciclo2Bloqueado) {
+    const btnGuardarCiclo2 = document.getElementById('btn-guardar-ciclo2');
+    if (btnGuardarCiclo2) {
+      const newBtn = btnGuardarCiclo2.cloneNode(true);
+      btnGuardarCiclo2.parentNode.replaceChild(newBtn, btnGuardarCiclo2);
+      
+      newBtn.onclick = () => {
+        mostrarModalConfirmacionCiclo2(() => guardarEspecialesPorCiclo('ciclo2'));
+      };
+    }
   }
   
   // Actualizar countdown de Ciclo 1 periódicamente (solo si no está bloqueado)
@@ -1110,6 +1172,15 @@ export async function renderizarEspeciales(contenedor, datosCuenta) {
           overflow-y: auto;
           padding: 0 20px 20px 20px;
           min-height: 0;
+        }
+        
+        .esp-selector-disabled {
+          background: #f2f2f7 !important;
+          border-radius: 12px;
+          padding: 12px 14px;
+          color: #8e8e93;
+          text-align: center;
+          font-weight: 600;
         }
       </style>
       
