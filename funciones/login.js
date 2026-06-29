@@ -5,7 +5,8 @@
 // - Autocomplete deshabilitado para evitar sugerencias de Windows
 // - Validación de espacios en blanco
 // - Limpieza completa de localStorage al logout
-// - CORREGIDO: Al seleccionar cuenta, se consultan los puntos reales desde Velneo
+// - CORREGIDO: Al seleccionar cuenta, se consultan los puntos de fase final (pts_par_fnl) desde Velneo
+// - CORREGIDO: Al cargar la lista de cuentas, se consultan los puntos de fase final de TODAS
 
 const BASE    = 'https://server.sion.hysintegrar.com/fifa2026/vERP_2_dat_dat/v1';
 const BASE_V2 = 'https://server.sion.hysintegrar.com/fifa2026/vERP_2_dat_dat/v2';
@@ -68,15 +69,17 @@ function limpiarDatosUsuario() {
     console.log('[Login] ✅ Datos de usuario limpiados');
 }
 
-// Función para obtener puntos reales de una cuenta por su ID
+// ========== CORREGIDO: Usar pts_par_fnl (puntos de fase final) ==========
+// Función para obtener puntos de fase final de una cuenta por su ID
 async function obtenerPuntosReales(cuentaId) {
     try {
         const response = await fetch(urlWithTimestamp(`${BASE}/fifa_jug?api_key=${KEY}&filter[id]=${cuentaId}`));
         if (!response.ok) return null;
         const data = await response.json();
         const jugador = data.fifa_jug?.[0];
-        if (jugador && jugador.pts !== undefined) {
-            return jugador.pts;
+        // Usar pts_par_fnl - puntos de la fase final
+        if (jugador && jugador.pts_par_fnl !== undefined) {
+            return jugador.pts_par_fnl;
         }
         return null;
     } catch (error) {
@@ -460,12 +463,15 @@ function renderizarCardsCuentas(usrId, nombreUsuario) {
   const listEl = document.getElementById('cuenta-list');
   const subEl = document.getElementById('cuenta-sub');
   
+  // Mostrar loading
+  if (listEl) listEl.innerHTML = '<div class="loader">⟳ Cargando cuentas...</div>';
+  
   fetch(urlWithTimestamp(BASE + '/fifa_jug?api_key=' + KEY))
     .then(r => {
       if (!r.ok) throw new Error('Error HTTP: ' + r.status);
       return r.json();
     })
-    .then(data => {
+    .then(async data => {
       const todos = data.fifa_jug || [];
       const cuentas = todos.filter(j => Number(j.usr) === usrId && j.off !== true);
       const colores = ['#f0a500', '#34c759', '#af52de', '#007aff', '#ff3b30'];
@@ -477,9 +483,31 @@ function renderizarCardsCuentas(usrId, nombreUsuario) {
       }
       
       if (subEl) subEl.textContent = 'Tienes ' + cuentas.length + ' cuenta' + (cuentas.length > 1 ? 's' : '') + ' asignada(s).';
+      
+      // ========== CONSULTAR PUNTOS DE FASE FINAL (pts_par_fnl) PARA TODAS LAS CUENTAS ==========
+      const cuentasConPuntos = await Promise.all(cuentas.map(async (c) => {
+        try {
+          const puntosReales = await obtenerPuntosReales(c.id);
+          return {
+            ...c,
+            ptsReales: puntosReales !== null ? puntosReales : (c.ptr || c.pun || 0)
+          };
+        } catch (error) {
+          console.error(`[Login] Error obteniendo puntos para cuenta ${c.id}:`, error);
+          return {
+            ...c,
+            ptsReales: c.ptr || c.pun || 0
+          };
+        }
+      }));
+      
+      // Ordenar por puntos (mayor a menor)
+      cuentasConPuntos.sort((a, b) => (b.ptsReales || 0) - (a.ptsReales || 0));
+      
       if (listEl) {
         listEl.innerHTML = '';
-        cuentas.forEach((c, i) => {
+        
+        cuentasConPuntos.forEach((c, i) => {
           const iniciales = (c.name || 'X').split(' ').map(w => w[0]).join('').toUpperCase().substring(0,2);
           const card = document.createElement('div');
           
@@ -487,8 +515,7 @@ function renderizarCardsCuentas(usrId, nombreUsuario) {
           card.style.cursor = 'pointer';
           card.style.transition = 'background 0.2s, transform 0.1s';
           
-          // Mostrar puntos de la cuenta (pueden ser 0 temporalmente)
-          const puntosMostrados = c.ptr || c.pun || 0;
+          const puntosMostrados = c.ptsReales || 0;
           
           card.innerHTML = `
             <div class="cuenta-avatar" style="background:${colores[i % colores.length]};color:#fff;">${iniciales}</div>
@@ -496,29 +523,25 @@ function renderizarCardsCuentas(usrId, nombreUsuario) {
               <div class="cuenta-nombre">${escapeHtml(c.name || '—')}</div>
               <div class="cuenta-tag">Cuenta ${i+1} · ID: ${c.id}</div>
             </div>
-            <div class="cuenta-pts">${puntosMostrados} pts</div>
+            <div class="cuenta-pts" style="font-weight:700; color:#ffd60a;">${puntosMostrados} pts</div>
           `;
           
           card.onmousedown = () => card.style.transform = 'scale(0.97)';
           card.onmouseup = () => card.style.transform = 'scale(1)';
           
-          // ========== CORRECCIÓN: Al seleccionar cuenta, obtener puntos reales ==========
           card.onclick = async () => {
-            // Mostrar loader en la card mientras se consultan los puntos reales
             const ptsElement = card.querySelector('.cuenta-pts');
             const textoOriginal = ptsElement.innerHTML;
             ptsElement.innerHTML = '⟳ ...';
             
-            // Obtener puntos reales desde Velneo
             const puntosReales = await obtenerPuntosReales(c.id);
             
-            // Crear objeto cuenta enriquecido con los puntos reales
             const cuentaEnriquecida = {
               ...c,
               pts: puntosReales !== null ? puntosReales : (c.ptr || c.pun || 0)
             };
             
-            console.log(`[Login] Cuenta ${c.name} (ID: ${c.id}) - Puntos reales: ${cuentaEnriquecida.pts}`);
+            console.log(`[Login] Cuenta ${c.name} (ID: ${c.id}) - Puntos fase final: ${cuentaEnriquecida.pts}`);
             
             const cuentascCard = document.getElementById('cuentasForm');
             const frontpageCard = document.getElementById('frontpageForm');
@@ -529,7 +552,7 @@ function renderizarCardsCuentas(usrId, nombreUsuario) {
                 cuentascCard.classList.remove('login-activo', 'login-retirado');
                 frontpageCard.classList.add('login-activo');
                 if (typeof callbackFrontpage === 'function') {
-                  callbackFrontpage(cuentaEnriquecida);  // Enviar cuenta con puntos reales
+                  callbackFrontpage(cuentaEnriquecida);
                 }
               }, 400);
             }
@@ -538,7 +561,7 @@ function renderizarCardsCuentas(usrId, nombreUsuario) {
           listEl.appendChild(card);
         });
         
-        // ========== BADGE PEQUEÑO PARA CAMBIAR CONTRASEÑA ==========
+        // ========== BADGE PARA CAMBIAR CONTRASEÑA ==========
         const btnCambioDiv = document.createElement('div');
         btnCambioDiv.style.marginTop = '12px';
         btnCambioDiv.style.textAlign = 'center';
@@ -555,7 +578,6 @@ function renderizarCardsCuentas(usrId, nombreUsuario) {
             mostrarModalCambioPassword(nombreUsuario, usrId);
           });
         }
-        // ========================================================
       }
     })
     .catch((error) => {
