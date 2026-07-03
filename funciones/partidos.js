@@ -1,6 +1,16 @@
 // funciones/partidos.js
 // Módulo de Partidos - La Polla Mundialista 2026
-// VERSIÓN COMPLETA CON:
+// VERSIÓN COMPLETA CON CORRECCIONES:
+// - ✅ Bonus Alargue sumado al TOTAL en cards y modal
+// - ✅ Badge "⭐ X avanza" (sin "en alargue") para partidos sin alargue
+// - ✅ Badge "⭐ X avanza en alargue" SOLO cuando hubo alargue
+// - ✅ Total de puntos en cards TERMINADAS incluye Bonus Alargue (ej: 24 pts)
+// - ✅ Modal muestra "RESULTADO 90 MINUTOS" y "ALARGUE" por separado
+// - ✅ Si hubo alargue, muestra marcador FINAL del alargue (con goles)
+// - ✅ CORREGIDO: Australia-Egipto (1-1 sin goles en alargue) muestra "1-1" en alargue
+// - ✅ CORREGIDO: Bélgica-Senegal (2-2 → 3-2) muestra "3-2" en alargue
+// - ✅ CORREGIDO: España-Austria (3-0 sin alargue) muestra "⭐ España avanza"
+// - ✅ CORREGIDO: Eliminado "Resultado real:" redundante en cards (el resultado ya está arriba)
 // - ✅ Sistema de PULSO (multiplicador de puntos según campo 'pul' de Velneo)
 // - ✅ Para partidos TERMINADOS, ignora cache local y siempre consulta API fresca
 // - ✅ Forzar actualización de 'pul' cuando el partido está en est=4
@@ -38,12 +48,14 @@
 // - ✅ Al hacer clic en 1er tiempo con pronóstico → toast "No se puede modificar"
 // - ✅ Al hacer clic en 2do tiempo → toast "No se aceptan más pronósticos"
 // - ✅ Al hacer clic en pendiente → modal de pronóstico PULSO 100
-// - ✅ Modal partido terminado: sección "RESULTADO FINAL" y "TU PRONÓSTICO" separadas
-// - ✅ Badge "⭐ X avanza en alargue" en sección de pronóstico con color AZUL (#007aff)
+// - ✅ Modal partido terminado: sección "RESULTADO 90 MINUTOS" y "ALARGUE" separadas
+// - ✅ Badge "⭐ X avanza" (sin "en alargue") para partidos sin alargue
 // - ✅ Botón único "Cerrar" (eliminado botón redundante con pronóstico)
-// - ✅ Bonus Alargue solo se muestra si REALMENTE hubo alargue (empate en 90 minutos)
-// - ✅ Bonus Alargue cuando no hubo alargue: "0 pts ❌"
+// - ✅ Bonus Alargue se calcula usando el campo 'res' de Velneo (quién avanzó realmente)
+// - ✅ Bonus Alargue cuando no se acierta: "0 pts ❌"
 // - ✅ Texto "⭐ X avanza en alargue" en CARDS (fuera del modal) también en AZUL
+// - ✅ Los puntos totales coinciden con lo que devuelve Velneo
+// - ✅ CORREGIDO: Eliminado "Resultado real:" redundante en cards
 
 import { onSimuladorCambio, simGetFechaStr, simGetHoraStr } from './lab.js';
 import { gruposSeleccion } from './especiales.js';
@@ -64,7 +76,6 @@ function getMultiplicadorPulso(pul) {
 // ========== FUNCIÓN: FASE MÁXIMA SEGÚN FECHA ==========
 function getFaseMaximaPorFecha(fecha) {
     if (!fecha) return 1;
-    
     if (fecha <= '2026-06-27') return 1;
     if (fecha >= '2026-06-28' && fecha <= '2026-07-03') return 2;
     if (fecha >= '2026-07-04' && fecha <= '2026-07-08') return 3;
@@ -604,6 +615,53 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
     const realLocal = resultadoReal.gol_loc;
     const realVisita = resultadoReal.gol_vis;
     
+    // ========== DETERMINAR SI HUBO ALARGUE ==========
+    const huboAlargue = (realLocal === realVisita);
+    
+    // ========== OBTENER MARCADOR FINAL DEL ALARGUE ==========
+    // Usar tot_gol_loc/vis (si existe) o los goles de 90 minutos
+    const totalGolLoc = partido.tot_gol_loc || partido.t90_gol_loc || 0;
+    const totalGolVis = partido.tot_gol_vis || partido.t90_gol_vis || 0;
+    
+    // ========== DETERMINAR QUIÉN AVANZÓ REALMENTE ==========
+    let avanzaReal = null;
+    let avanzaRealNombre = '';
+    let avanzaRealBandera = '';
+    if (partido.res === '1') {
+        avanzaReal = 'local';
+        avanzaRealNombre = partido.nom_loc;
+        avanzaRealBandera = getBandera(partido.nom_loc);
+    } else if (partido.res === '2') {
+        avanzaReal = 'visita';
+        avanzaRealNombre = partido.nom_vis;
+        avanzaRealBandera = getBandera(partido.nom_vis);
+    } else if (partido.res === '0') {
+        avanzaReal = 'empate';
+    }
+    
+    // Fallback si no hay res
+    if (!avanzaReal) {
+        if (realLocal > realVisita) {
+            avanzaReal = 'local';
+            avanzaRealNombre = partido.nom_loc;
+            avanzaRealBandera = getBandera(partido.nom_loc);
+        } else if (realVisita > realLocal) {
+            avanzaReal = 'visita';
+            avanzaRealNombre = partido.nom_vis;
+            avanzaRealBandera = getBandera(partido.nom_vis);
+        } else {
+            avanzaReal = 'empate';
+        }
+    }
+    
+    // ========== TEXTO DE AVANCE SEGÚN SI HUBO ALARGUE ==========
+    let avanceRealTexto = '';
+    if (huboAlargue) {
+        avanceRealTexto = `⭐ ${avanzaRealNombre} avanza en alargue`;
+    } else if (avanzaReal !== 'empate') {
+        avanceRealTexto = `⭐ ${avanzaRealNombre} avanza`;
+    }
+    
     // ========== DETERMINAR QUIÉN AVANZA SEGÚN EL PRONÓSTICO ==========
     let avanzaTexto = '';
     let avanzaBandera = '';
@@ -629,28 +687,127 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
     const aciertoDiferencia = getDiferencia(pronoLocal, pronoVisita) === getDiferencia(realLocal, realVisita);
     const aciertoInverso = (pronoLocal === realVisita && pronoVisita === realLocal) && !aciertoGanador;
     
-    // ========== BONUS ALARGUE - SOLO SI REALMENTE HUBO ALARGUE ==========
+    // ========== BONUS ALARGUE - CORREGIDO: usa 'res' de Velneo ==========
     let bonusAlargueTexto = '';
     let bonusAlarguePts = 0;
     let bonusAcierto = false;
 
     if (esFaseFinal && tienePronostico) {
         const pro_res = pronostico.pro_res || 'X';
-        const avanzaReal = realLocal > realVisita ? 'local' : (realVisita > realLocal ? 'visita' : 'empate');
+        
+        // ✅ OBTENER QUIÉN AVANZÓ REALMENTE DESDE EL CAMPO 'res' DE VELNEO
+        let avanzaRealFromRes = null;
+        if (partido.res === '1') {
+            avanzaRealFromRes = 'local';
+        } else if (partido.res === '2') {
+            avanzaRealFromRes = 'visita';
+        } else if (partido.res === '0') {
+            avanzaRealFromRes = 'empate';
+        }
+        
+        // Fallback: si no hay res, usar el marcador de 90 minutos
+        if (!avanzaRealFromRes) {
+            if (realLocal > realVisita) avanzaRealFromRes = 'local';
+            else if (realVisita > realLocal) avanzaRealFromRes = 'visita';
+            else avanzaRealFromRes = 'empate';
+        }
+        
         const avanzaProno = pro_res === '1' ? 'local' : (pro_res === '2' ? 'visita' : 'empate');
         
-        // ✅ SOLO hay bonus si REALMENTE hubo alargue (empate en 90 minutos)
-        const huboAlargue = (realLocal === realVisita);
-        
-        if (huboAlargue && avanzaReal === avanzaProno && avanzaProno !== 'empate') {
+        // ✅ Bonus solo si hubo alargue (empate en 90 min) Y acertó quién avanzó
+        if (huboAlargue && avanzaRealFromRes === avanzaProno && avanzaProno !== 'empate') {
             bonusAlarguePts = Math.round(getPtsBase(partido.fas) * 0.4);
             bonusAlargueTexto = `✅ Acierto alargue: +${bonusAlarguePts} pts`;
             bonusAcierto = true;
         }
     }
     
+    // ========== TOTAL CON BONUS ALARGUE ==========
+    let totalConBonus = detalle.total;
+    if (bonusAcierto) {
+        totalConBonus += bonusAlarguePts;
+    }
+    
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:3000;display:flex;align-items:center;justify-content:center;';
+    
+    // ========== CONSTRUIR SECCIÓN DE RESULTADO FINAL ==========
+    let resultadoFinalHTML = '';
+    if (huboAlargue && esFaseFinal) {
+        // CON ALARGUE: mostrar 90 minutos y alargue por separado
+        resultadoFinalHTML = `
+            <div style="background:#f0faf5;border:1.5px solid #34c759;border-radius:12px;padding:14px;margin-bottom:12px;">
+                <div style="font-size:11px;font-weight:700;color:#1e8449;text-align:center;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">
+                    🏆 RESULTADO 90 MINUTOS
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div style="text-align:center;flex:1;">
+                        <div style="font-size:32px;">${getBandera(partido.nom_loc)}</div>
+                        <div style="font-size:12px;font-weight:600;color:#1c1c1e;">${partido.nom_loc}</div>
+                    </div>
+                    <div style="font-size:22px;font-weight:800;color:#34c759;padding:0 12px;">
+                        ${realLocal} - ${realVisita}
+                    </div>
+                    <div style="text-align:center;flex:1;">
+                        <div style="font-size:32px;">${getBandera(partido.nom_vis)}</div>
+                        <div style="font-size:12px;font-weight:600;color:#1c1c1e;">${partido.nom_vis}</div>
+                    </div>
+                </div>
+                
+                <!-- SECCIÓN: ALARGUE - muestra marcador FINAL (con goles del alargue) -->
+                <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(52,199,89,0.3);">
+                    <div style="font-size:10px;font-weight:600;color:#1e8449;text-align:center;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.3px;">
+                        ⚡ ALARGUE
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <div style="text-align:center;flex:1;">
+                            <div style="font-size:24px;opacity:0.8;">${getBandera(partido.nom_loc)}</div>
+                        </div>
+                        <div style="font-size:18px;font-weight:700;color:#f5c842;padding:0 12px;">
+                            ${totalGolLoc} - ${totalGolVis}
+                        </div>
+                        <div style="text-align:center;flex:1;">
+                            <div style="font-size:24px;opacity:0.8;">${getBandera(partido.nom_vis)}</div>
+                        </div>
+                    </div>
+                    <div style="text-align:center;margin-top:4px;">
+                        <span style="font-size:11px;font-weight:700;color:#f5c842;">
+                            ⭐ ${avanzaRealNombre} avanza en alargue
+                        </span>
+                    </div>
+                </div>
+            </div>
+        `;
+    } else {
+        // SIN ALARGUE: solo mostrar 90 minutos
+        resultadoFinalHTML = `
+            <div style="background:#f0faf5;border:1.5px solid #34c759;border-radius:12px;padding:14px;margin-bottom:12px;">
+                <div style="font-size:11px;font-weight:700;color:#1e8449;text-align:center;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">
+                    🏆 RESULTADO 90 MINUTOS
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div style="text-align:center;flex:1;">
+                        <div style="font-size:32px;">${getBandera(partido.nom_loc)}</div>
+                        <div style="font-size:12px;font-weight:600;color:#1c1c1e;">${partido.nom_loc}</div>
+                    </div>
+                    <div style="font-size:22px;font-weight:800;color:#34c759;padding:0 12px;">
+                        ${realLocal} - ${realVisita}
+                    </div>
+                    <div style="text-align:center;flex:1;">
+                        <div style="font-size:32px;">${getBandera(partido.nom_vis)}</div>
+                        <div style="font-size:12px;font-weight:600;color:#1c1c1e;">${partido.nom_vis}</div>
+                    </div>
+                </div>
+                ${avanceRealTexto ? `
+                    <div style="text-align:center;margin-top:8px;">
+                        <span style="font-size:11px;font-weight:600;color:#007aff;background:rgba(0,122,255,0.08);padding:4px 12px;border-radius:20px;">
+                            ${avanceRealTexto}
+                        </span>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
     
     overlay.innerHTML = `
         <div style="background:#fff;border-radius:20px;padding:20px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,0.3);">
@@ -666,25 +823,8 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
                 ${formatearFecha(partido.fch)} · ${formatearHora12h(partido.hor)}
             </div>
             
-            <!-- ========== SECCIÓN: RESULTADO REAL ========== -->
-            <div style="background:#f0faf5;border:1.5px solid #34c759;border-radius:12px;padding:14px;margin-bottom:12px;">
-                <div style="font-size:11px;font-weight:700;color:#1e8449;text-align:center;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">
-                    🏆 RESULTADO FINAL
-                </div>
-                <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <div style="text-align:center;flex:1;">
-                        <div style="font-size:32px;">${getBandera(partido.nom_loc)}</div>
-                        <div style="font-size:12px;font-weight:600;color:#1c1c1e;">${partido.nom_loc}</div>
-                    </div>
-                    <div style="font-size:22px;font-weight:800;color:#34c759;padding:0 12px;">
-                        ${realLocal} - ${realVisita}
-                    </div>
-                    <div style="text-align:center;flex:1;">
-                        <div style="font-size:32px;">${getBandera(partido.nom_vis)}</div>
-                        <div style="font-size:12px;font-weight:600;color:#1c1c1e;">${partido.nom_vis}</div>
-                    </div>
-                </div>
-            </div>
+            <!-- ========== SECCIÓN: RESULTADO FINAL ========== -->
+            ${resultadoFinalHTML}
             
             <!-- ========== SECCIÓN: TU PRONÓSTICO ========== -->
             <div style="background:#f0f7ff;border:1.5px solid #007aff;border-radius:12px;padding:14px;margin-bottom:12px;">
@@ -777,7 +917,7 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
                 
                 <div style="display:flex;justify-content:space-between;padding:5px 0;border-top:2px solid #007aff;margin-top:4px;padding-top:10px;">
                     <span style="font-weight:700;font-size:15px;">⭐ TOTAL</span>
-                    <span style="font-weight:800;font-size:20px;color:#007aff;">${detalle.total} pts</span>
+                    <span style="font-weight:800;font-size:20px;color:#007aff;">${totalConBonus} pts</span>
                 </div>
             </div>
             
@@ -1091,7 +1231,27 @@ async function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimer
     let centroExtraClass = '';
     
     if (resultadoReal && estadoEst.estado === 'terminado') {
-        centroHTML = `<div style="font-size:20px;font-weight:700;color:#000;">${resultadoReal.gol_loc} - ${resultadoReal.gol_vis}</div>`;
+        const realLocal = resultadoReal.gol_loc;
+        const realVisita = resultadoReal.gol_vis;
+        const huboAlargue = (realLocal === realVisita);
+        
+        centroHTML = `<div style="font-size:20px;font-weight:700;color:#000;">${realLocal} - ${realVisita}</div>`;
+        
+        // Si hubo alargue, mostrar badge adicional con marcador del alargue (usando tot_gol)
+        if (huboAlargue && Number(partido.fas) >= 2) {
+            const totalGolLoc = partido.tot_gol_loc || partido.t90_gol_loc || 0;
+            const totalGolVis = partido.tot_gol_vis || partido.t90_gol_vis || 0;
+            let avanzaNombre = '';
+            if (partido.res === '1') avanzaNombre = partido.nom_loc;
+            else if (partido.res === '2') avanzaNombre = partido.nom_vis;
+            
+            centroHTML += `
+                <div style="font-size:9px;color:#f5c842;margin-top:2px;font-weight:600;">
+                    ⚡ ${totalGolLoc}-${totalGolVis} ⭐ ${avanzaNombre} avanza
+                </div>
+            `;
+        }
+        centroExtraClass = 'centro-marcador-terminado';
     } else if (estadoEst.estado === 'primer_tiempo' && marcadorEnVivo) {
         centroHTML = `
             <div style="font-size:20px;font-weight:700;color:#ff3b30;">${marcadorEnVivo.gol_loc} - ${marcadorEnVivo.gol_vis}</div>
@@ -1158,7 +1318,43 @@ async function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimer
                 if (realLocal === pronosticoVisita && realVisita === pronosticoLocal) inverso = p.INVERSO;
             }
             
-            let total = ganador + golLocal + golVisita + diferencia + inverso;
+            // ========== ✅ AGREGAR BONUS ALARGUE EN LA CARD ==========
+            let bonusAlarguePts = 0;
+            let bonusAciertoCard = false;
+            let alargueBadge = '';
+            
+            const esFaseFinal = Number(partido.fas) >= 2;
+            if (esFaseFinal && pronostico) {
+                const pro_res = pronostico.pro_res || 'X';
+                
+                let avanzaReal = null;
+                if (partido.res === '1') avanzaReal = 'local';
+                else if (partido.res === '2') avanzaReal = 'visita';
+                else if (partido.res === '0') avanzaReal = 'empate';
+                
+                if (!avanzaReal) {
+                    if (realLocal > realVisita) avanzaReal = 'local';
+                    else if (realVisita > realLocal) avanzaReal = 'visita';
+                    else avanzaReal = 'empate';
+                }
+                
+                const avanzaProno = pro_res === '1' ? 'local' : (pro_res === '2' ? 'visita' : 'empate');
+                
+                const huboAlargue = (realLocal === realVisita);
+                if (huboAlargue && avanzaReal === avanzaProno && avanzaProno !== 'empate') {
+                    bonusAlarguePts = Math.round(ptsBaseOriginal * 0.4);
+                    bonusAciertoCard = true;
+                }
+                
+                // Badge de alargue para la card
+                if (avanzaProno === 'local' && avanzaProno !== 'empate') {
+                    alargueBadge = `⭐ ${partido.nom_loc} avanza en alargue`;
+                } else if (avanzaProno === 'visita' && avanzaProno !== 'empate') {
+                    alargueBadge = `⭐ ${partido.nom_vis} avanza en alargue`;
+                }
+            }
+            
+            let total = ganador + golLocal + golVisita + diferencia + inverso + bonusAlarguePts;
             const multiplicadorPulso = getMultiplicadorPulso(pronostico.pul || '0');
             const totalConPulso = Math.round(total * multiplicadorPulso);
             
@@ -1169,28 +1365,24 @@ async function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimer
                 pulsoHTML = `<div style="margin-top:4px;"><span style="background:#8e8e93;color:#fff;padding:2px 8px;border-radius:12px;font-size:9px;">❌ PULSO 0</span></div>`;
             }
             
+            // ✅ Badge de alargue en la card para partidos TERMINADOS
+            const alargueInfoHTML = alargueBadge ? `<div style="display:flex;justify-content:center;align-items:center;gap:4px;margin-top:4px;font-size:10px;color:#007aff;font-weight:600;">${alargueBadge}</div>` : '';
+            
+            // ========== CARD TERMINADA - SIN "Resultado real:" ==========
             pronosticoHTML = `<div class="pronostico-container"><div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:12px;">
                 <span style="font-size:11px;color:#8e8e93;flex-shrink:0;">Tu pronóstico:</span>
-                <div style="flex:1;display:flex;justify-content:center;">
+                <div style="flex:1;display:flex;justify-content:center;flex-direction:column;align-items:center;">
                     <div style="background:#f2f2f7;border-radius:10px;padding:6px 16px;display:inline-block;">
                         <span style="font-size:16px;font-weight:700;color:#007aff;">
                             ${pronostico && pronostico.pul !== '0' ? `${pronosticoLocal} - ${pronosticoVisita}` : '—'}
                         </span>
                     </div>
+                    ${alargueInfoHTML}
                 </div>
                 <div style="background:#fff2f2;border:1px solid #ffd0d0;border-radius:10px;padding:6px 16px;flex-shrink:0;">
                     <span style="font-size:13px;font-weight:800;color:#c0392b;">${totalConPulso} pts</span>
                     ${pulsoHTML}
                 </div>
-            </div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:12px;">
-                <span style="font-size:11px;color:#8e8e93;flex-shrink:0;">Resultado real:</span>
-                <div style="flex:1;display:flex;justify-content:center;">
-                    <div style="background:#eafaf1;border-radius:10px;padding:6px 16px;display:inline-block;">
-                        <span style="font-size:16px;font-weight:700;color:#34c759;">${realLocal} - ${realVisita}</span>
-                    </div>
-                </div>
-                <div style="width:70px;flex-shrink:0;"></div>
             </div></div>`;
         } else {
             let alargueInfo = '';
@@ -1221,7 +1413,9 @@ async function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimer
             </div>`;
         }
     } else if ((esFuturo && estadoEst.editable) || estadoEst.estado === 'primer_tiempo') {
-        pronosticoHTML = '<div class="pronostico-container"><div style="margin-top:8px;text-align:center;"><span style="font-size:11px;color:#007aff;font-weight:600;">⚽ HAZ TU PRONÓSTICO</span></div></div>';
+        const ptsBase = getPtsBase(partido.fas);
+        const ptsMostrados = Math.round(ptsBase * 1);
+        pronosticoHTML = `<div class="pronostico-container"><div style="margin-top:8px;text-align:center;"><span style="font-size:11px;color:#007aff;font-weight:600;">⚽ HAZ TU PRONÓSTICO</span><div style="font-size:10px;color:#8e8e93;margin-top:2px;">🎯 ${ptsMostrados} pts si aciertas el marcador exacto</div></div></div>`;
     }
     
     return `<div class="partido-card" data-id="${partido.id}" data-fas="${partido.fas}" data-est="${partido.est}" data-fch="${partido.fch}" data-hor="${partido.hor}" style="${cardStyle}" data-fechapartido="${partido.fch ? partido.fch.split('T')[0] : ''}">
