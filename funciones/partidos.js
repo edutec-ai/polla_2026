@@ -1,16 +1,21 @@
 // funciones/partidos.js
 // Módulo de Partidos - La Polla Mundialista 2026
 // VERSIÓN COMPLETA CON CORRECCIONES:
+// - ✅ Bonus Alargue calculado usando 'res' de Velneo (quién avanzó realmente)
+// - ✅ Puntos base para todas las fases (1-7)
+// - ✅ Tercer puesto (fas=6) tiene 100 pts base
+// - ✅ Final (fas=7) tiene 200 pts base
 // - ✅ Bonus Alargue sumado al TOTAL en cards y modal
 // - ✅ Badge "⭐ X avanza" (sin "en alargue") para partidos sin alargue
 // - ✅ Badge "⭐ X avanza en alargue" SOLO cuando hubo alargue
-// - ✅ Total de puntos en cards TERMINADAS incluye Bonus Alargue (ej: 24 pts)
+// - ✅ Total de puntos en cards TERMINADAS incluye Bonus Alargue
 // - ✅ Modal muestra "RESULTADO 90 MINUTOS" y "ALARGUE" por separado
 // - ✅ Si hubo alargue, muestra marcador FINAL del alargue (con goles)
-// - ✅ CORREGIDO: Australia-Egipto (1-1 sin goles en alargue) muestra "1-1" en alargue
-// - ✅ CORREGIDO: Bélgica-Senegal (2-2 → 3-2) muestra "3-2" en alargue
-// - ✅ CORREGIDO: España-Austria (3-0 sin alargue) muestra "⭐ España avanza"
-// - ✅ CORREGIDO: Eliminado "Resultado real:" redundante en cards (el resultado ya está arriba)
+// - ✅ CORREGIDO: Eliminado "Resultado real:" redundante en cards
+// - ✅ CORREGIDO: cargarPronosticos() usa API v1 (BASE) en lugar de v2 (BASE_V2)
+// - ✅ CORREGIDO: cargarPronosticos() trae TODOS los registros (sin límite de 100)
+// - ✅ CORREGIDO: frontpage.js cargarDatosIniciales() usa API v1
+// - ✅ CORREGIDO: obtenerPronosticoActual() y obtenerPronosticoFresco() usan API v1
 // - ✅ Sistema de PULSO (multiplicador de puntos según campo 'pul' de Velneo)
 // - ✅ Para partidos TERMINADOS, ignora cache local y siempre consulta API fresca
 // - ✅ Forzar actualización de 'pul' cuando el partido está en est=4
@@ -55,7 +60,10 @@
 // - ✅ Bonus Alargue cuando no se acierta: "0 pts ❌"
 // - ✅ Texto "⭐ X avanza en alargue" en CARDS (fuera del modal) también en AZUL
 // - ✅ Los puntos totales coinciden con lo que devuelve Velneo
-// - ✅ CORREGIDO: Eliminado "Resultado real:" redundante en cards
+// - ✅ CORREGIDO: getPtsBase(6) = 100 pts (Tercer puesto)
+// - ✅ CORREGIDO: getPtsBase(7) = 200 pts (Final)
+// - ✅ CORREGIDO: cargarPronosticos() usa API v1 (BASE) en lugar de v2 (BASE_V2)
+// - ✅ CORREGIDO: todas las llamadas a fifa_jug_pro usan API v1 para obtener 104 registros
 
 import { onSimuladorCambio, simGetFechaStr, simGetHoraStr } from './lab.js';
 import { gruposSeleccion } from './especiales.js';
@@ -178,6 +186,7 @@ function getPtsBase(fase) {
     if (f === 3) return 60; 
     if (f === 4) return 80; 
     if (f === 5) return 100; 
+    if (f === 6) return 100;   // ✅ Tercer puesto: 100 pts
     if (f === 7) return 200; 
     return 20; 
 }
@@ -193,9 +202,10 @@ function getDiferencia(local, visita) {
     return Math.abs(local - visita);
 }
 
-function calcularPuntosDetalle(pronostico, resultadoReal, fase, pul) {
+// ========== CALCULAR PUNTOS DETALLE CON BONUS ALARGUE ==========
+function calcularPuntosDetalle(pronostico, resultadoReal, partido, fase, pul) {
     if (!pronostico || !resultadoReal) {
-        return { ganador: 0, golLocal: 0, golVisita: 0, diferencia: 0, inverso: 0, total: 0, multiplicador: 1 };
+        return { ganador: 0, golLocal: 0, golVisita: 0, diferencia: 0, inverso: 0, bonusAlargue: 0, total: 0, multiplicador: 1 };
     }
     
     const ptsBaseOriginal = getPtsBase(fase);
@@ -228,7 +238,41 @@ function calcularPuntosDetalle(pronostico, resultadoReal, fase, pul) {
     let total = ganador + golLocal + golVisita + diferencia + inverso;
     total = Math.round(total * multiplicador);
     
-    return { ganador, golLocal, golVisita, diferencia, inverso, total, multiplicador };
+    // ========== BONUS ALARGUE - USA 'res' DE VELNEO ==========
+    let bonusAlarguePts = 0;
+    const esFaseFinal = Number(fase) >= 2;
+    
+    if (esFaseFinal && pronostico) {
+        const pro_res = pronostico.pro_res || 'X';
+        
+        // ✅ OBTENER QUIÉN AVANZÓ REALMENTE DESDE EL CAMPO 'res' DE VELNEO
+        let avanzaReal = null;
+        if (partido.res === '1') {
+            avanzaReal = 'local';
+        } else if (partido.res === '2') {
+            avanzaReal = 'visita';
+        } else if (partido.res === '0') {
+            avanzaReal = 'empate';
+        }
+        
+        // Fallback: si no hay res, usar el marcador de 90 minutos
+        if (!avanzaReal) {
+            if (resultadoReal.gol_loc > resultadoReal.gol_vis) avanzaReal = 'local';
+            else if (resultadoReal.gol_vis > resultadoReal.gol_loc) avanzaReal = 'visita';
+            else avanzaReal = 'empate';
+        }
+        
+        const avanzaProno = pro_res === '1' ? 'local' : (pro_res === '2' ? 'visita' : 'empate');
+        
+        // ✅ Bonus solo si acertó quién avanza (usando 'res' de Velneo)
+        if (avanzaReal === avanzaProno && avanzaProno !== 'empate') {
+            bonusAlarguePts = Math.round(ptsBaseOriginal * 0.4);
+        }
+    }
+    
+    total += bonusAlarguePts;
+    
+    return { ganador, golLocal, golVisita, diferencia, inverso, bonusAlargue: bonusAlarguePts, total, multiplicador };
 }
 
 // ========== FUNCIONES DE ESTADO DE PARTIDO ==========
@@ -387,12 +431,12 @@ async function cargarEquipos() {
     }
 }
 
-// ========== FUNCIONES DE PRONÓSTICOS ==========
+// ========== FUNCIONES DE PRONÓSTICOS - CORREGIDO: Usa API v1 (BASE) ==========
 async function obtenerPronosticoActual(ptdId) {
     if (!currentJugador) return null;
     try {
         const timestamp = Date.now();
-        const response = await fetch(`${BASE_V2}/fifa_jug_pro?api_key=${KEY}&filter[id]=${currentJugador.id}&fields=jug,jug.name,id,ptd,pro_gol_loc,pro_gol_vis,pro_res,pul&_=${timestamp}`);
+        const response = await fetch(`${BASE}/fifa_jug_pro?api_key=${KEY}&filter[id]=${currentJugador.id}&fields=jug,jug.name,id,ptd,pro_gol_loc,pro_gol_vis,pro_res,pul&_=${timestamp}`);
         const data = await response.json();
         const pronostico = data.fifa_jug_pro?.find(p => p.ptd === ptdId);
         if (pronostico) {
@@ -414,7 +458,7 @@ async function obtenerPronosticoFresco(ptdId) {
     if (!currentJugador) return null;
     try {
         const timestamp = Date.now();
-        const response = await fetch(`${BASE_V2}/fifa_jug_pro?api_key=${KEY}&filter[id]=${currentJugador.id}&fields=jug,jug.name,id,ptd,pro_gol_loc,pro_gol_vis,pro_res,pul&_=${timestamp}`);
+        const response = await fetch(`${BASE}/fifa_jug_pro?api_key=${KEY}&filter[id]=${currentJugador.id}&fields=jug,jug.name,id,ptd,pro_gol_loc,pro_gol_vis,pro_res,pul&_=${timestamp}`);
         const data = await response.json();
         const pronostico = data.fifa_jug_pro?.find(p => p.ptd === ptdId);
         if (pronostico) {
@@ -432,6 +476,7 @@ async function obtenerPronosticoFresco(ptdId) {
     }
 }
 
+// ========== CARGAR PRONÓSTICOS - CORREGIDO: Usa API v1 (BASE) ==========
 async function cargarPronosticos(jugId, forceRefresh = false) {
     if (!jugId) return;
     
@@ -446,7 +491,8 @@ async function cargarPronosticos(jugId, forceRefresh = false) {
     
     try {
         const timestamp = Date.now();
-        const response = await fetch(`${BASE_V2}/fifa_jug_pro?api_key=${KEY}&filter[id]=${jugId}&fields=jug,jug.name,id,ptd,pro_gol_loc,pro_gol_vis,pro_res,pul&_=${timestamp}`);
+        // ✅ Usando API v1 (BASE) - ahora trae TODOS los 104 registros
+        const response = await fetch(`${BASE}/fifa_jug_pro?api_key=${KEY}&filter[id]=${jugId}&fields=jug,jug.name,id,ptd,pro_gol_loc,pro_gol_vis,pro_res,pul&_=${timestamp}`);
         const pronosticos = (await response.json()).fifa_jug_pro || [];
         pronosticosCache = {};
         pronosticos.forEach(p => { 
@@ -459,6 +505,7 @@ async function cargarPronosticos(jugId, forceRefresh = false) {
         });
         guardarPronosticosPartidosLocal(pronosticosCache);
         console.log(`[Partidos] ✅ ${Object.keys(pronosticosCache).length} pronósticos desde API (con PULSO y pro_res)`);
+        
     } catch (error) { 
         console.error('Error cargando pronósticos:', error); 
     }
@@ -606,7 +653,7 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
         return;
     }
     
-    const detalle = calcularPuntosDetalle(pronostico, resultadoReal, partido.fas, pronostico.pul || '0');
+    const detalle = calcularPuntosDetalle(pronostico, resultadoReal, partido, partido.fas, pronostico.pul || '0');
     const esFaseFinal = Number(partido.fas) >= 2;
     
     const tienePronostico = pronostico && pronostico.pul !== '0' && pronostico.pul !== undefined;
@@ -619,7 +666,6 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
     const huboAlargue = (realLocal === realVisita);
     
     // ========== OBTENER MARCADOR FINAL DEL ALARGUE ==========
-    // Usar tot_gol_loc/vis (si existe) o los goles de 90 minutos
     const totalGolLoc = partido.tot_gol_loc || partido.t90_gol_loc || 0;
     const totalGolVis = partido.tot_gol_vis || partido.t90_gol_vis || 0;
     
@@ -687,46 +733,9 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
     const aciertoDiferencia = getDiferencia(pronoLocal, pronoVisita) === getDiferencia(realLocal, realVisita);
     const aciertoInverso = (pronoLocal === realVisita && pronoVisita === realLocal) && !aciertoGanador;
     
-    // ========== BONUS ALARGUE - CORREGIDO: usa 'res' de Velneo ==========
-    let bonusAlargueTexto = '';
-    let bonusAlarguePts = 0;
-    let bonusAcierto = false;
-
-    if (esFaseFinal && tienePronostico) {
-        const pro_res = pronostico.pro_res || 'X';
-        
-        // ✅ OBTENER QUIÉN AVANZÓ REALMENTE DESDE EL CAMPO 'res' DE VELNEO
-        let avanzaRealFromRes = null;
-        if (partido.res === '1') {
-            avanzaRealFromRes = 'local';
-        } else if (partido.res === '2') {
-            avanzaRealFromRes = 'visita';
-        } else if (partido.res === '0') {
-            avanzaRealFromRes = 'empate';
-        }
-        
-        // Fallback: si no hay res, usar el marcador de 90 minutos
-        if (!avanzaRealFromRes) {
-            if (realLocal > realVisita) avanzaRealFromRes = 'local';
-            else if (realVisita > realLocal) avanzaRealFromRes = 'visita';
-            else avanzaRealFromRes = 'empate';
-        }
-        
-        const avanzaProno = pro_res === '1' ? 'local' : (pro_res === '2' ? 'visita' : 'empate');
-        
-        // ✅ Bonus solo si hubo alargue (empate en 90 min) Y acertó quién avanzó
-        if (huboAlargue && avanzaRealFromRes === avanzaProno && avanzaProno !== 'empate') {
-            bonusAlarguePts = Math.round(getPtsBase(partido.fas) * 0.4);
-            bonusAlargueTexto = `✅ Acierto alargue: +${bonusAlarguePts} pts`;
-            bonusAcierto = true;
-        }
-    }
-    
-    // ========== TOTAL CON BONUS ALARGUE ==========
-    let totalConBonus = detalle.total;
-    if (bonusAcierto) {
-        totalConBonus += bonusAlarguePts;
-    }
+    // Bonus Alargue (ya viene en detalle.bonusAlargue)
+    const bonusAcierto = detalle.bonusAlargue > 0;
+    const bonusAlargueTexto = bonusAcierto ? `✅ Acierto alargue: +${detalle.bonusAlargue} pts` : '0 pts ❌';
     
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:3000;display:flex;align-items:center;justify-content:center;';
@@ -734,7 +743,6 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
     // ========== CONSTRUIR SECCIÓN DE RESULTADO FINAL ==========
     let resultadoFinalHTML = '';
     if (huboAlargue && esFaseFinal) {
-        // CON ALARGUE: mostrar 90 minutos y alargue por separado
         resultadoFinalHTML = `
             <div style="background:#f0faf5;border:1.5px solid #34c759;border-radius:12px;padding:14px;margin-bottom:12px;">
                 <div style="font-size:11px;font-weight:700;color:#1e8449;text-align:center;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">
@@ -754,7 +762,6 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
                     </div>
                 </div>
                 
-                <!-- SECCIÓN: ALARGUE - muestra marcador FINAL (con goles del alargue) -->
                 <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(52,199,89,0.3);">
                     <div style="font-size:10px;font-weight:600;color:#1e8449;text-align:center;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.3px;">
                         ⚡ ALARGUE
@@ -779,7 +786,6 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
             </div>
         `;
     } else {
-        // SIN ALARGUE: solo mostrar 90 minutos
         resultadoFinalHTML = `
             <div style="background:#f0faf5;border:1.5px solid #34c759;border-radius:12px;padding:14px;margin-bottom:12px;">
                 <div style="font-size:11px;font-weight:700;color:#1e8449;text-align:center;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">
@@ -823,7 +829,6 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
                 ${formatearFecha(partido.fch)} · ${formatearHora12h(partido.hor)}
             </div>
             
-            <!-- ========== SECCIÓN: RESULTADO FINAL ========== -->
             ${resultadoFinalHTML}
             
             <!-- ========== SECCIÓN: TU PRONÓSTICO ========== -->
@@ -845,7 +850,6 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
                     </div>
                 </div>
                 
-                <!-- ========== BADGE: QUIÉN AVANZA EN ALARGUE (COLOR AZUL) ========== -->
                 ${avanzaTexto ? `
                     <div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:8px;background:rgba(0,122,255,0.08);border:1px solid rgba(0,122,255,0.2);border-radius:20px;padding:4px 14px;">
                         <span style="font-size:20px;">${avanzaBandera}</span>
@@ -899,12 +903,11 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
                     </span>
                 </div>
                 
-                <!-- ========== BONUS ALARGUE - CORREGIDO ========== -->
                 ${esFaseFinal ? `
                     <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:0.5px solid rgba(0,0,0,0.05);">
                         <span>⭐ Bonus Alargue</span>
                         <span style="font-weight:600;color:${bonusAcierto ? '#f1c40f' : '#8e8e93'};">
-                            ${bonusAcierto ? bonusAlargueTexto : '0 pts ❌'}
+                            ${bonusAlargueTexto}
                         </span>
                     </div>
                 ` : ''}
@@ -917,7 +920,7 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
                 
                 <div style="display:flex;justify-content:space-between;padding:5px 0;border-top:2px solid #007aff;margin-top:4px;padding-top:10px;">
                     <span style="font-weight:700;font-size:15px;">⭐ TOTAL</span>
-                    <span style="font-weight:800;font-size:20px;color:#007aff;">${totalConBonus} pts</span>
+                    <span style="font-weight:800;font-size:20px;color:#007aff;">${detalle.total} pts</span>
                 </div>
             </div>
             
@@ -1237,7 +1240,6 @@ async function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimer
         
         centroHTML = `<div style="font-size:20px;font-weight:700;color:#000;">${realLocal} - ${realVisita}</div>`;
         
-        // Si hubo alargue, mostrar badge adicional con marcador del alargue (usando tot_gol)
         if (huboAlargue && Number(partido.fas) >= 2) {
             const totalGolLoc = partido.tot_gol_loc || partido.t90_gol_loc || 0;
             const totalGolVis = partido.tot_gol_vis || partido.t90_gol_vis || 0;
@@ -1318,7 +1320,7 @@ async function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimer
                 if (realLocal === pronosticoVisita && realVisita === pronosticoLocal) inverso = p.INVERSO;
             }
             
-            // ========== ✅ AGREGAR BONUS ALARGUE EN LA CARD ==========
+            // ========== AGREGAR BONUS ALARGUE EN LA CARD ==========
             let bonusAlarguePts = 0;
             let bonusAciertoCard = false;
             let alargueBadge = '';
@@ -1346,7 +1348,6 @@ async function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimer
                     bonusAciertoCard = true;
                 }
                 
-                // Badge de alargue para la card
                 if (avanzaProno === 'local' && avanzaProno !== 'empate') {
                     alargueBadge = `⭐ ${partido.nom_loc} avanza en alargue`;
                 } else if (avanzaProno === 'visita' && avanzaProno !== 'empate') {
@@ -1365,10 +1366,8 @@ async function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimer
                 pulsoHTML = `<div style="margin-top:4px;"><span style="background:#8e8e93;color:#fff;padding:2px 8px;border-radius:12px;font-size:9px;">❌ PULSO 0</span></div>`;
             }
             
-            // ✅ Badge de alargue en la card para partidos TERMINADOS
             const alargueInfoHTML = alargueBadge ? `<div style="display:flex;justify-content:center;align-items:center;gap:4px;margin-top:4px;font-size:10px;color:#007aff;font-weight:600;">${alargueBadge}</div>` : '';
             
-            // ========== CARD TERMINADA - SIN "Resultado real:" ==========
             pronosticoHTML = `<div class="pronostico-container"><div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:12px;">
                 <span style="font-size:11px;color:#8e8e93;flex-shrink:0;">Tu pronóstico:</span>
                 <div style="flex:1;display:flex;justify-content:center;flex-direction:column;align-items:center;">
@@ -1390,7 +1389,6 @@ async function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimer
             const avanzaLocal = pro_res === '1';
             const avanzaVisita = pro_res === '2';
             
-            // ========== COLOR AZUL PARA CARDS (fuera del modal) ==========
             if (avanzaVisita && Number(partido.fas) >= 2) {
                 alargueInfo = `<div style="display:flex;justify-content:center;align-items:center;gap:4px;margin-top:4px;font-size:10px;color:#007aff;font-weight:600;">⭐ ${partido.nom_vis} avanza en alargue</div>`;
             } else if (avanzaLocal && Number(partido.fas) >= 2) {
