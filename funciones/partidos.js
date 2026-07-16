@@ -1,69 +1,6 @@
 // funciones/partidos.js
 // Módulo de Partidos - La Polla Mundialista 2026
-// VERSIÓN COMPLETA CON CORRECCIONES:
-// - ✅ Bonus Alargue calculado usando 'res' de Velneo (quién avanzó realmente)
-// - ✅ Puntos base para todas las fases (1-7)
-// - ✅ Tercer puesto (fas=6) tiene 100 pts base
-// - ✅ Final (fas=7) tiene 200 pts base
-// - ✅ Bonus Alargue sumado al TOTAL en cards y modal
-// - ✅ Badge "⭐ X avanza" (sin "en alargue") para partidos sin alargue
-// - ✅ Badge "⭐ X avanza en alargue" SOLO cuando hubo alargue
-// - ✅ Total de puntos en cards TERMINADAS incluye Bonus Alargue
-// - ✅ Modal muestra "RESULTADO 90 MINUTOS" y "ALARGUE" por separado
-// - ✅ Si hubo alargue, muestra marcador FINAL del alargue (con goles)
-// - ✅ CORREGIDO: Eliminado "Resultado real:" redundante en cards
-// - ✅ CORREGIDO: cargarPronosticos() usa API v1 (BASE) en lugar de v2 (BASE_V2)
-// - ✅ CORREGIDO: cargarPronosticos() trae TODOS los registros (sin límite de 100)
-// - ✅ CORREGIDO: frontpage.js cargarDatosIniciales() usa API v1
-// - ✅ CORREGIDO: obtenerPronosticoActual() y obtenerPronosticoFresco() usan API v1
-// - ✅ Sistema de PULSO (multiplicador de puntos según campo 'pul' de Velneo)
-// - ✅ Para partidos TERMINADOS, ignora cache local y siempre consulta API fresca
-// - ✅ Forzar actualización de 'pul' cuando el partido está en est=4
-// - ✅ Permite apostar durante 1er tiempo (est=2) solo si NO tiene pronóstico (PULSO 50)
-// - ✅ Bloquea completamente en 2do tiempo (est=3) y terminado (est=4)
-// - ✅ Valores vacíos (placeholder "-") cuando pul=0 (nunca ha pronosticado)
-// - ✅ Mensajes de toast en dos líneas con <br>
-// - ✅ Badge de advertencia para 0-0
-// - ✅ Filtro dinámico por fase (fas <= faseMax) para acumulación progresiva
-// - ✅ Función getFaseMaximaPorFecha() para mapear fecha → fase máxima
-// - ✅ Selector de alargue en modal para fases finales (fas >= 2)
-// - ✅ Bonus Alargue en detalle de puntos
-// - ✅ Badge 0-0 movido ARRIBA en el modal
-// - ✅ Selector de alargue centrado, con banderas grandes y texto azul
-// - ✅ Radio buttons de alargue SIN SELECCIÓN por defecto
-// - ✅ Captura correcta de la selección de alargue al guardar
-// - ✅ pro_res se sobrescribe correctamente con la selección de alargue
-// - ✅ pro_res se guarda en pronosticosCache
-// - ✅ INDICADOR "⭐ avanza en alargue" en cards de partidos (color AZUL)
-// - ✅ Modal carga pronóstico existente (inputs y selector de alargue)
-// - ✅ Modal de partido terminado con desglose de puntos
-// - ✅ Badge "MARCADOR 90 MINUTOS" debajo de la cancha en el modal
-// - ✅ SCROLL VERTICAL en modal (max-height: 90vh, overflow-y: auto)
-// - ✅ Tamaños reducidos en modal (banderas 40px, nombres 13px)
-// - ✅ Modal centrado verticalmente
-// - ✅ Pestaña GRUPOS muestra imagen CRUCES DE 16AVOS (cruces.jpg)
-// - ✅ cargarPronosticos() LEE pro_res DE VELNEO
-// - ✅ obtenerPronosticoFresco() LEE pro_res DE VELNEO
-// - ✅ obtenerPronosticoActual() LEE pro_res DE VELNEO
-// - ✅ renderizarPartidos() SIEMPRE consulta API al cargar (forceRefresh=true)
-// - ✅ refrescarContenido() usa forceRefresh=false (para mantener rendimiento)
-// - ✅ Modal de partido terminado: muestra desglose de puntos (NO editable)
-// - ✅ Al hacer clic en partido terminado → modal de resultados
-// - ✅ Al hacer clic en 1er tiempo sin pronóstico → modal de pronóstico PULSO 50
-// - ✅ Al hacer clic en 1er tiempo con pronóstico → toast "No se puede modificar"
-// - ✅ Al hacer clic en 2do tiempo → toast "No se aceptan más pronósticos"
-// - ✅ Al hacer clic en pendiente → modal de pronóstico PULSO 100
-// - ✅ Modal partido terminado: sección "RESULTADO 90 MINUTOS" y "ALARGUE" separadas
-// - ✅ Badge "⭐ X avanza" (sin "en alargue") para partidos sin alargue
-// - ✅ Botón único "Cerrar" (eliminado botón redundante con pronóstico)
-// - ✅ Bonus Alargue se calcula usando el campo 'res' de Velneo (quién avanzó realmente)
-// - ✅ Bonus Alargue cuando no se acierta: "0 pts ❌"
-// - ✅ Texto "⭐ X avanza en alargue" en CARDS (fuera del modal) también en AZUL
-// - ✅ Los puntos totales coinciden con lo que devuelve Velneo
-// - ✅ CORREGIDO: getPtsBase(6) = 100 pts (Tercer puesto)
-// - ✅ CORREGIDO: getPtsBase(7) = 200 pts (Final)
-// - ✅ CORREGIDO: cargarPronosticos() usa API v1 (BASE) en lugar de v2 (BASE_V2)
-// - ✅ CORREGIDO: todas las llamadas a fifa_jug_pro usan API v1 para obtener 104 registros
+// VERSIÓN COMPLETA CON CORRECCIONES
 
 import { onSimuladorCambio, simGetFechaStr, simGetHoraStr } from './lab.js';
 import { gruposSeleccion } from './especiales.js';
@@ -88,7 +25,9 @@ function getFaseMaximaPorFecha(fecha) {
     if (fecha >= '2026-06-28' && fecha <= '2026-07-03') return 2;
     if (fecha >= '2026-07-04' && fecha <= '2026-07-08') return 3;
     if (fecha >= '2026-07-09' && fecha <= '2026-07-13') return 4;
-    if (fecha >= '2026-07-14' && fecha <= '2026-07-17') return 5;
+    if (fecha >= '2026-07-14' && fecha <= '2026-07-15') return 5;
+    // ✅ Desde el 16 de julio, mostrar TODAS las fases
+    if (fecha >= '2026-07-16') return 7;  // Todas las fases
     if (fecha === '2026-07-18') return 6;
     if (fecha >= '2026-07-19') return 7;
     return 1;
@@ -186,7 +125,7 @@ function getPtsBase(fase) {
     if (f === 3) return 60; 
     if (f === 4) return 80; 
     if (f === 5) return 100; 
-    if (f === 6) return 100;   // ✅ Tercer puesto: 100 pts
+    if (f === 6) return 100;
     if (f === 7) return 200; 
     return 20; 
 }
@@ -202,7 +141,6 @@ function getDiferencia(local, visita) {
     return Math.abs(local - visita);
 }
 
-// ========== CALCULAR PUNTOS DETALLE CON BONUS ALARGUE ==========
 function calcularPuntosDetalle(pronostico, resultadoReal, partido, fase, pul) {
     if (!pronostico || !resultadoReal) {
         return { ganador: 0, golLocal: 0, golVisita: 0, diferencia: 0, inverso: 0, bonusAlargue: 0, total: 0, multiplicador: 1 };
@@ -238,14 +176,12 @@ function calcularPuntosDetalle(pronostico, resultadoReal, partido, fase, pul) {
     let total = ganador + golLocal + golVisita + diferencia + inverso;
     total = Math.round(total * multiplicador);
     
-    // ========== BONUS ALARGUE - USA 'res' DE VELNEO ==========
     let bonusAlarguePts = 0;
     const esFaseFinal = Number(fase) >= 2;
     
     if (esFaseFinal && pronostico) {
         const pro_res = pronostico.pro_res || 'X';
         
-        // ✅ OBTENER QUIÉN AVANZÓ REALMENTE DESDE EL CAMPO 'res' DE VELNEO
         let avanzaReal = null;
         if (partido.res === '1') {
             avanzaReal = 'local';
@@ -255,7 +191,6 @@ function calcularPuntosDetalle(pronostico, resultadoReal, partido, fase, pul) {
             avanzaReal = 'empate';
         }
         
-        // Fallback: si no hay res, usar el marcador de 90 minutos
         if (!avanzaReal) {
             if (resultadoReal.gol_loc > resultadoReal.gol_vis) avanzaReal = 'local';
             else if (resultadoReal.gol_vis > resultadoReal.gol_loc) avanzaReal = 'visita';
@@ -264,7 +199,6 @@ function calcularPuntosDetalle(pronostico, resultadoReal, partido, fase, pul) {
         
         const avanzaProno = pro_res === '1' ? 'local' : (pro_res === '2' ? 'visita' : 'empate');
         
-        // ✅ Bonus solo si acertó quién avanza (usando 'res' de Velneo)
         if (avanzaReal === avanzaProno && avanzaProno !== 'empate') {
             bonusAlarguePts = Math.round(ptsBaseOriginal * 0.4);
         }
@@ -431,7 +365,7 @@ async function cargarEquipos() {
     }
 }
 
-// ========== FUNCIONES DE PRONÓSTICOS - CORREGIDO: Usa API v1 (BASE) ==========
+// ========== FUNCIONES DE PRONÓSTICOS ==========
 async function obtenerPronosticoActual(ptdId) {
     if (!currentJugador) return null;
     try {
@@ -476,7 +410,6 @@ async function obtenerPronosticoFresco(ptdId) {
     }
 }
 
-// ========== CARGAR PRONÓSTICOS - CORREGIDO: Usa API v1 (BASE) ==========
 async function cargarPronosticos(jugId, forceRefresh = false) {
     if (!jugId) return;
     
@@ -491,7 +424,6 @@ async function cargarPronosticos(jugId, forceRefresh = false) {
     
     try {
         const timestamp = Date.now();
-        // ✅ Usando API v1 (BASE) - ahora trae TODOS los 104 registros
         const response = await fetch(`${BASE}/fifa_jug_pro?api_key=${KEY}&filter[id]=${jugId}&fields=jug,jug.name,id,ptd,pro_gol_loc,pro_gol_vis,pro_res,pul&_=${timestamp}`);
         const pronosticos = (await response.json()).fifa_jug_pro || [];
         pronosticosCache = {};
@@ -645,7 +577,7 @@ function validarInputNumerico(input) {
     });
 }
 
-// ========== MODAL: PARTIDO TERMINADO (SOLO LECTURA) ==========
+// ========== MODAL: PARTIDO TERMINADO ==========
 function mostrarModalResultadoTerminado(partido, pronostico) {
     const resultadoReal = getResultadoReal(partido.id);
     if (!resultadoReal) {
@@ -662,14 +594,10 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
     const realLocal = resultadoReal.gol_loc;
     const realVisita = resultadoReal.gol_vis;
     
-    // ========== DETERMINAR SI HUBO ALARGUE ==========
     const huboAlargue = (realLocal === realVisita);
-    
-    // ========== OBTENER MARCADOR FINAL DEL ALARGUE ==========
     const totalGolLoc = partido.tot_gol_loc || partido.t90_gol_loc || 0;
     const totalGolVis = partido.tot_gol_vis || partido.t90_gol_vis || 0;
     
-    // ========== DETERMINAR QUIÉN AVANZÓ REALMENTE ==========
     let avanzaReal = null;
     let avanzaRealNombre = '';
     let avanzaRealBandera = '';
@@ -685,7 +613,6 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
         avanzaReal = 'empate';
     }
     
-    // Fallback si no hay res
     if (!avanzaReal) {
         if (realLocal > realVisita) {
             avanzaReal = 'local';
@@ -700,7 +627,6 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
         }
     }
     
-    // ========== TEXTO DE AVANCE SEGÚN SI HUBO ALARGUE ==========
     let avanceRealTexto = '';
     if (huboAlargue) {
         avanceRealTexto = `⭐ ${avanzaRealNombre} avanza en alargue`;
@@ -708,7 +634,6 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
         avanceRealTexto = `⭐ ${avanzaRealNombre} avanza`;
     }
     
-    // ========== DETERMINAR QUIÉN AVANZA SEGÚN EL PRONÓSTICO ==========
     let avanzaTexto = '';
     let avanzaBandera = '';
     let avanzaNombre = '';
@@ -726,21 +651,17 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
         }
     }
     
-    // Aciertos
     const aciertoGanador = getGanador(pronoLocal, pronoVisita) === getGanador(realLocal, realVisita);
     const aciertoGolLocal = realLocal === pronoLocal;
     const aciertoGolVisita = realVisita === pronoVisita;
     const aciertoDiferencia = getDiferencia(pronoLocal, pronoVisita) === getDiferencia(realLocal, realVisita);
     const aciertoInverso = (pronoLocal === realVisita && pronoVisita === realLocal) && !aciertoGanador;
-    
-    // Bonus Alargue (ya viene en detalle.bonusAlargue)
     const bonusAcierto = detalle.bonusAlargue > 0;
     const bonusAlargueTexto = bonusAcierto ? `✅ Acierto alargue: +${detalle.bonusAlargue} pts` : '0 pts ❌';
     
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:3000;display:flex;align-items:center;justify-content:center;';
     
-    // ========== CONSTRUIR SECCIÓN DE RESULTADO FINAL ==========
     let resultadoFinalHTML = '';
     if (huboAlargue && esFaseFinal) {
         resultadoFinalHTML = `
@@ -761,7 +682,6 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
                         <div style="font-size:12px;font-weight:600;color:#1c1c1e;">${partido.nom_vis}</div>
                     </div>
                 </div>
-                
                 <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(52,199,89,0.3);">
                     <div style="font-size:10px;font-weight:600;color:#1e8449;text-align:center;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.3px;">
                         ⚡ ALARGUE
@@ -817,21 +737,14 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
     
     overlay.innerHTML = `
         <div style="background:#fff;border-radius:20px;padding:20px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,0.3);">
-            
-            <!-- HEADER -->
             <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
                 <div style="font-size:17px;font-weight:700;">✅ Partido Terminado</div>
                 <button class="modal-cerrar-btn" style="background:none;border:none;font-size:22px;cursor:pointer;">✕</button>
             </div>
-            
-            <!-- FECHA/HORA -->
             <div style="font-size:12px;color:#8e8e93;margin-bottom:14px;text-align:center;">
                 ${formatearFecha(partido.fch)} · ${formatearHora12h(partido.hor)}
             </div>
-            
             ${resultadoFinalHTML}
-            
-            <!-- ========== SECCIÓN: TU PRONÓSTICO ========== -->
             <div style="background:#f0f7ff;border:1.5px solid #007aff;border-radius:12px;padding:14px;margin-bottom:12px;">
                 <div style="font-size:11px;font-weight:700;color:#005fc4;text-align:center;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">
                     📋 TU PRONÓSTICO
@@ -849,7 +762,6 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
                         <div style="font-size:12px;font-weight:600;color:#1c1c1e;">${partido.nom_vis}</div>
                     </div>
                 </div>
-                
                 ${avanzaTexto ? `
                     <div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:8px;background:rgba(0,122,255,0.08);border:1px solid rgba(0,122,255,0.2);border-radius:20px;padding:4px 14px;">
                         <span style="font-size:20px;">${avanzaBandera}</span>
@@ -860,18 +772,14 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
                         <span style="font-size:12px;color:#8e8e93;">❌ No seleccionaste quién avanza en alargue</span>
                     </div>
                 ` : '')}
-                
                 ${!tienePronostico ? `
                     <div style="text-align:center;margin-top:6px;font-size:11px;color:#ff3b30;font-weight:600;">
                         ⚠️ No realizaste pronóstico para este partido
                     </div>
                 ` : ''}
             </div>
-            
-            <!-- ========== SECCIÓN: DESGLOSE DE PUNTOS ========== -->
             <div style="background:#f2f2f7;border-radius:12px;padding:14px;margin-bottom:12px;">
                 <div style="font-size:13px;font-weight:700;margin-bottom:10px;text-align:center;">📊 Desglose de Puntos</div>
-                
                 <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:0.5px solid rgba(0,0,0,0.05);">
                     <span>🏆 Ganador / Empate</span>
                     <span style="font-weight:600;color:${aciertoGanador ? '#34c759' : '#8e8e93'};">
@@ -902,7 +810,6 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
                         ${detalle.inverso} pts ${aciertoInverso ? '🔄' : '❌'}
                     </span>
                 </div>
-                
                 ${esFaseFinal ? `
                     <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:0.5px solid rgba(0,0,0,0.05);">
                         <span>⭐ Bonus Alargue</span>
@@ -911,24 +818,19 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
                         </span>
                     </div>
                 ` : ''}
-                
                 ${detalle.multiplicador < 1 && detalle.total > 0 ? `
                 <div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid #e5e5ea;margin-top:4px;padding-top:8px;">
                     <span>⚡ PULSO ${detalle.multiplicador === 0.5 ? '50' : '0'}</span>
                     <span style="font-weight:600;color:#ff9500;">×${detalle.multiplicador}</span>
                 </div>` : ''}
-                
                 <div style="display:flex;justify-content:space-between;padding:5px 0;border-top:2px solid #007aff;margin-top:4px;padding-top:10px;">
                     <span style="font-weight:700;font-size:15px;">⭐ TOTAL</span>
                     <span style="font-weight:800;font-size:20px;color:#007aff;">${detalle.total} pts</span>
                 </div>
             </div>
-            
-            <!-- ========== BOTÓN DE CERRAR (ÚNICO) ========== -->
             <button class="modal-cerrar-btn" style="width:100%;background:#f2f2f7;color:#1c1c1e;border:none;border-radius:14px;padding:14px;font-weight:600;cursor:pointer;margin-top:4px;">
                 ✕ Cerrar
             </button>
-            
             <div style="margin-top:10px;font-size:10px;color:#8e8e93;text-align:center;">
                 💡 Este partido ya finalizó. No se pueden modificar los pronósticos.
             </div>
@@ -942,7 +844,7 @@ function mostrarModalResultadoTerminado(partido, pronostico) {
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 }
 
-// ========== MODAL: PRONÓSTICO (EDITABLE) ==========
+// ========== MODAL: PRONÓSTICO ==========
 function mostrarModalPronostico(partido, pulsoAEnviar, pronosticoExistente = null) {
     const estadoEst = getEstadoPartidoPorEst(partido);
     const ptsBase = estadoEst.puntosBase || getPtsBase(partido.fas);
@@ -965,14 +867,12 @@ function mostrarModalPronostico(partido, pulsoAEnviar, pronosticoExistente = nul
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:3000;display:flex;align-items:center;justify-content:center;';
     
-    // Badge MARCADOR 90 MINUTOS
     const badge90HTML = `
         <div style="text-align: center; margin-bottom: 10px;">
             <span style="display:inline-block;background:#ffd60a;color:#1a1a2e;font-size:11px;font-weight:700;padding:2px 14px;border-radius:20px;letter-spacing:0.5px;">🟡 MARCADOR 90 MINUTOS</span>
         </div>
     `;
     
-    // Badge 0-0
     const badgeZeroHTML = `
         <div style="text-align: center; margin-bottom: 10px;">
             <div style="background:rgb(17,55,95);color:white;font-size:11px;font-weight:500;padding:4px 12px;border-radius:20px;display:inline-block;line-height:1.4;">
@@ -982,7 +882,6 @@ function mostrarModalPronostico(partido, pulsoAEnviar, pronosticoExistente = nul
         </div>
     `;
     
-    // Selector de alargue
     let alargueHTML = '';
     if (esFaseFinal) {
         const bonusAlargueVal = Math.round(ptsBase * 0.4);
@@ -1151,7 +1050,7 @@ function mostrarModalPronostico(partido, pulsoAEnviar, pronosticoExistente = nul
     }
 }
 
-// ========== ABRIR MODAL (PUNTO DE ENTRADA PRINCIPAL) ==========
+// ========== ABRIR MODAL ==========
 function abrirModal(partido, fechaSim, horaSim) {
     const estadoEst = getEstadoPartidoPorEst(partido);
     let pronostico = pronosticosCache[partido.id] || { s1: 0, s2: 0, pul: '0', pro_res: 'X' };
@@ -1160,19 +1059,16 @@ function abrirModal(partido, fechaSim, horaSim) {
         pronostico = { s1: temp.s1, s2: temp.s2, pul: pronostico.pul || '0', pro_res: pronostico.pro_res || 'X' };
     }
     
-    // ========== PARTIDO TERMINADO → Mostrar resultados ==========
     if (estadoEst.estado === 'terminado') {
         mostrarModalResultadoTerminado(partido, pronostico);
         return;
     }
     
-    // ========== PARTIDO EN 2DO TIEMPO → Bloqueado ==========
     if (estadoEst.estado === 'segundo_tiempo') {
         mostrarToast('🔒 Partido en 2do tiempo.<br>No se aceptan más pronósticos.', 'err');
         return;
     }
     
-    // ========== PARTIDO EN 1ER TIEMPO ==========
     if (estadoEst.estado === 'primer_tiempo') {
         const yaTienePronostico = pronosticosCache[partido.id] !== undefined && pronosticosCache[partido.id].pul !== '0';
         if (yaTienePronostico) {
@@ -1183,7 +1079,6 @@ function abrirModal(partido, fechaSim, horaSim) {
         return;
     }
     
-    // ========== PARTIDO PENDIENTE ==========
     mostrarModalPronostico(partido, '1', pronostico);
 }
 
@@ -1320,7 +1215,6 @@ async function renderPartidoCard(partido, fechaSim, horaSim, tipoFondo, esPrimer
                 if (realLocal === pronosticoVisita && realVisita === pronosticoLocal) inverso = p.INVERSO;
             }
             
-            // ========== AGREGAR BONUS ALARGUE EN LA CARD ==========
             let bonusAlarguePts = 0;
             let bonusAciertoCard = false;
             let alargueBadge = '';
@@ -1581,7 +1475,15 @@ async function refrescarContenido() {
     const fechaSim = simGetFechaStr ? simGetFechaStr() : new Date().toISOString().split('T')[0];
     const horaSim = simGetHoraStr ? simGetHoraStr() : new Date().toTimeString().split(' ')[0].substring(0,5);
     
-    const faseMax = getFaseMaximaPorFecha(fechaSim);
+    // ✅ Si es 16 de julio o después, mostrar TODOS los partidos
+    let faseMax;
+    if (fechaSim >= '2026-07-16') {
+        faseMax = 7;  // Todas las fases
+        console.log(`[Partidos] 📅 Fecha ${fechaSim} - Mostrando TODOS los partidos (fas 1-7)`);
+    } else {
+        faseMax = getFaseMaximaPorFecha(fechaSim);
+    }
+    
     console.log(`[Partidos] Fase máxima permitida para ${fechaSim}: ${faseMax}`);
     
     const partidosVisibles = partidosCache.filter(p => { 
@@ -1590,6 +1492,19 @@ async function refrescarContenido() {
     });
     
     console.log(`[Partidos] ${partidosVisibles.length} partidos visibles (fas <= ${faseMax})`);
+    
+    // Log para depuración - mostrar qué partidos NO se están mostrando
+    const partidosOcultos = partidosCache.filter(p => {
+        const est = Number(p.est);
+        return est >= 1 && est <= 4 && p.fas > faseMax;
+    });
+    if (partidosOcultos.length > 0) {
+        console.log(`[Partidos] ⚠️ ${partidosOcultos.length} partidos ocultos (fas > ${faseMax}):`);
+        partidosOcultos.forEach(p => {
+            console.log(`   - ID: ${p.id} | ${p.nom_loc} vs ${p.nom_vis} | fas=${p.fas}`);
+        });
+    }
+    
     const primerDia = obtenerPrimerDiaConPartidos(partidosVisibles);
     
     if (tabActivo === 'todos') {
@@ -1654,7 +1569,7 @@ function cambiarTab(tab) {
 }
 
 // ========== RENDERIZAR PRINCIPAL ==========
-export async function renderizarPartidos(contenedor, datosCuenta, tabInicial = 'todos') {
+export async function renderizarPartidos(contenedor, datosCuenta, tabInicial = 'todos', scrollToId = null) {
     if (!contenedor) return;
     currentJugador = datosCuenta;
     detenerCountdown();
@@ -1695,7 +1610,26 @@ export async function renderizarPartidos(contenedor, datosCuenta, tabInicial = '
     });
     
     tabActivo = tabInicial;
-    refrescarContenido();
+    await refrescarContenido();
+    
+    if (scrollToId) {
+        setTimeout(() => {
+            const card = document.querySelector(`.partido-card[data-id="${scrollToId}"]`);
+            if (card) {
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                card.style.transition = 'box-shadow 0.5s ease';
+                card.style.boxShadow = '0 0 25px rgba(255, 149, 0, 0.7)';
+                card.style.borderColor = '#ff9500';
+                card.style.borderWidth = '3px';
+                setTimeout(() => {
+                    card.style.boxShadow = '';
+                    card.style.borderWidth = '';
+                }, 4000);
+            } else {
+                console.log(`[Partidos] No se encontró card con id=${scrollToId}`);
+            }
+        }, 1000);
+    }
     
     iniciarActualizacionEnVivo();
     
@@ -1711,5 +1645,11 @@ export async function renderizarPartidos(contenedor, datosCuenta, tabInicial = '
     });
 }
 
-// ========== EXPORTAR FUNCIONES ==========
-export { cargarPartidos, getBandera, formatearHora12h };
+// ========== EXPORTAR ==========
+// ✅ setGlobalCambiarVistaCallback YA está exportada arriba como export function
+// No la incluyas aquí para evitar duplicación
+export { 
+    cargarPartidos, 
+    getBandera, 
+    formatearHora12h
+};
