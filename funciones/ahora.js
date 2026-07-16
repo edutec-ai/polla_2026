@@ -3,12 +3,16 @@
 // - Lista plana de partidos (sin agrupación por grupo/hora)
 // - Scroll vertical DENTRO de la card
 // - SIN scroll horizontal
-// - Click → redirige a partidos.js con tab='todos'
+// - Click → redirige a partidos.js con tab='todos' y scroll al partido
 // - MOCK INTELIGENTE: solo se muestra si NO hay partidos reales en la API
 // - Countdown para partidos pendientes
 // - CARD INFORMATIVA: explica 90 minutos + alargue + puntos extra
+// - CORREGIDO: Orden específico: 103 (3er Puesto) primero, luego 104 (Final)
 
-import { cargarPartidos, getBandera, formatearHora12h } from './partidos.js';
+import { getBandera } from './banderas.js';
+
+const BASE = 'https://server.sion.hysintegrar.com/fifa2026/vERP_2_dat_dat/v1';
+const KEY = 'SuzvTp4qwXQtAVFJbdzP';
 
 let currentJugador = null;
 let pronosticosCache = {};
@@ -29,12 +33,24 @@ export function refrescarAhora() {
     }
 }
 
-// ========== SUSCRIPCIÓN AL SIMULADOR (legacy - compatibilidad) ==========
+// ========== SUSCRIPCIÓN AL SIMULADOR ==========
 export function suscribirAhoraAlSimulador(callback) {
     console.log('[Ahora] suscribirAhoraAlSimulador llamado (legacy)');
     if (typeof callback === 'function') {
         window.__ahoraSimuladorCallback = callback;
     }
+}
+
+// ========== FUNCIÓN LOCAL formatearHora12h ==========
+function formatearHora12h(horaStr) {
+    if (!horaStr) return '';
+    const horaLimpia = horaStr.split(':').slice(0, 2).join(':');
+    const [hora, minuto] = horaLimpia.split(':');
+    let horaNum = parseInt(hora);
+    const periodo = horaNum >= 12 ? 'pm' : 'am';
+    if (horaNum > 12) horaNum -= 12;
+    if (horaNum === 0) horaNum = 12;
+    return `${horaNum}:${minuto} ${periodo}`;
 }
 
 // ========== FECHA LOCAL ==========
@@ -46,13 +62,53 @@ function getLocalDate() {
     return `${year}-${month}-${day}`;
 }
 
-// ========== FILTRAR PARTIDOS DE HOY ==========
-function obtenerPartidosDeHoy(partidos) {
-    const hoy = getLocalDate();
-    return partidos.filter(p => {
-        const fechaPartido = p.fch?.split('T')[0];
-        return fechaPartido === hoy;
-    });
+// ========== CARGAR PARTIDOS DE HOY ==========
+async function cargarPartidosHoy() {
+    try {
+        const timestamp = Date.now();
+        const response = await fetch(`${BASE}/fifa_ptd?api_key=${KEY}&_=${timestamp}`);
+        const data = await response.json();
+        const todos = data.fifa_ptd || [];
+        const hoy = getLocalDate();
+        
+        // PRIMERO: buscar partidos de hoy
+        let hoyFiltered = todos.filter(p => {
+            const fechaPartido = p.fch?.split('T')[0];
+            const est = Number(p.est);
+            return fechaPartido === hoy && est >= 1 && est <= 4;
+        });
+        
+        // SEGUNDO: si no hay partidos de hoy, buscar 103 y 104
+        if (hoyFiltered.length === 0) {
+            console.log('[Ahora] No hay partidos para hoy, buscando 103 y 104...');
+            hoyFiltered = todos.filter(p => {
+                const id = Number(p.id);
+                const est = Number(p.est);
+                return (id === 103 || id === 104) && est >= 1 && est <= 4;
+            });
+            
+            if (hoyFiltered.length > 0) {
+                console.log(`[Ahora] ✅ Encontrados partidos 103 y 104`);
+            }
+        }
+        
+        // ORDEN ESPECÍFICO: 103 (3er Puesto) primero, luego 104 (Final)
+        hoyFiltered.sort((a, b) => {
+            const idA = Number(a.id);
+            const idB = Number(b.id);
+            // 103 va antes que 104
+            if (idA === 103 && idB === 104) return -1;
+            if (idA === 104 && idB === 103) return 1;
+            // Si no son 103/104, ordenar por hora
+            return (a.hor || '00:00:00').localeCompare(b.hor || '00:00:00');
+        });
+        
+        console.log(`[Ahora] ${hoyFiltered.length} partidos para mostrar`);
+        return hoyFiltered;
+    } catch (error) {
+        console.error('[Ahora] Error cargando partidos:', error);
+        return [];
+    }
 }
 
 // ========== CALCULAR COUNTDOWN ==========
@@ -198,11 +254,17 @@ function renderizarInfoCard() {
     `;
 }
 
-// ========== RENDERIZAR FILA DE PARTIDO (3 COLUMNAS) ==========
+// ========== RENDERIZAR FILA DE PARTIDO ==========
 function renderizarFila(partido) {
     const estado = getEstadoPartido(partido);
     const horaFormateada = formatearHora12h(partido.hor);
     const countdown = calcularCountdown(partido.fch?.split('T')[0], partido.hor);
+    
+    let faseBadge = '';
+    const fas = Number(partido.fas);
+    if (fas === 6) faseBadge = '🥉 3er Puesto';
+    else if (fas === 7) faseBadge = '🏆 FINAL';
+    else if (fas >= 2) faseBadge = `⚡ Fase ${fas}`;
     
     let vsContent = '';
     
@@ -215,6 +277,7 @@ function renderizarFila(partido) {
                 <span style="font-size: 10px;">${estado.badgeIcono}</span>
                 <span style="font-size: 10px; font-weight: 600; color: ${estado.badgeColor};">${estado.badge}</span>
             </div>
+            ${faseBadge ? `<div style="font-size: 8px; color: #8e8e93; margin-top: 2px;">${faseBadge}</div>` : ''}
         `;
     } else if (estado.tipo === 'envivo') {
         vsContent = `
@@ -225,18 +288,21 @@ function renderizarFila(partido) {
                 <span style="font-size: 10px;">${estado.badgeIcono}</span>
                 <span style="font-size: 10px; font-weight: 600; color: ${estado.badgeColor};">${estado.badge}</span>
             </div>
+            ${faseBadge ? `<div style="font-size: 8px; color: #8e8e93; margin-top: 2px;">${faseBadge}</div>` : ''}
         `;
     } else if (countdown) {
         vsContent = `
             <div style="font-weight: 600; color: #8e8e93; font-size: 11px; margin-bottom: 4px;">VS</div>
             <div style="font-size: 13px; font-weight: 600; color: #007aff; margin-bottom: 4px;">${horaFormateada}</div>
             <div class="ahora-countdown" data-fch="${partido.fch?.split('T')[0]}" data-hor="${partido.hor}" style="font-size: 11px; font-weight: 600; color: #ff9500;">${countdown}</div>
+            ${faseBadge ? `<div style="font-size: 8px; color: #8e8e93; margin-top: 2px;">${faseBadge}</div>` : ''}
         `;
     } else {
         vsContent = `
             <div style="font-weight: 600; color: #8e8e93; font-size: 11px; margin-bottom: 4px;">VS</div>
             <div style="font-size: 13px; font-weight: 600; color: #007aff; margin-bottom: 4px;">${horaFormateada}</div>
             <div style="font-size: 10px; color: #8e8e93;">PENDIENTE</div>
+            ${faseBadge ? `<div style="font-size: 8px; color: #8e8e93; margin-top: 2px;">${faseBadge}</div>` : ''}
         `;
     }
     
@@ -273,9 +339,7 @@ async function renderizarAhora(contenedor, datosCuenta) {
     
     if (currentJugador) {
         try {
-            const BASE_V2 = 'https://server.sion.hysintegrar.com/fifa2026/vERP_2_dat_dat/v2';
-            const KEY = 'SuzvTp4qwXQtAVFJbdzP';
-            const response = await fetch(`${BASE_V2}/fifa_jug_pro?api_key=${KEY}&filter[id]=${currentJugador.id}`);
+            const response = await fetch(`${BASE}/fifa_jug_pro?api_key=${KEY}&filter[id]=${currentJugador.id}&fields=jug,jug.name,id,ptd,pro_gol_loc,pro_gol_vis,pro_res,pul&_=${Date.now()}`);
             const data = await response.json();
             pronosticosCache = {};
             (data.fifa_jug_pro || []).forEach(p => {
@@ -286,15 +350,16 @@ async function renderizarAhora(contenedor, datosCuenta) {
         }
     }
     
-    let partidos = await cargarPartidos();
-    let partidosHoy = obtenerPartidosDeHoy(partidos);
+    let partidosHoy = await cargarPartidosHoy();
     
-    // ========== MOCK INTELIGENTE ==========
     if (partidosHoy.length === 0) {
         partidosHoy = generarMockPartidos();
-        console.log('🧪 MODO PRUEBA - Usando mock porque no hay partidos reales en la API');
+        console.log('🧪 MODO PRUEBA - Usando mock');
     } else {
-        console.log(`✅ ${partidosHoy.length} partidos reales cargados desde la API`);
+        console.log(`✅ ${partidosHoy.length} partidos reales cargados`);
+        partidosHoy.forEach(p => {
+            console.log(`   📅 ${p.nom_loc} vs ${p.nom_vis} (id=${p.id}, fas=${p.fas})`);
+        });
     }
     
     if (partidosHoy.length === 0) {
@@ -306,9 +371,6 @@ async function renderizarAhora(contenedor, datosCuenta) {
         `;
         return;
     }
-    
-    // Ordenar partidos por hora
-    partidosHoy.sort((a, b) => (a.hor || '00:00:00').localeCompare(b.hor || '00:00:00'));
     
     let filasHtml = partidosHoy.map(p => renderizarFila(p)).join('');
     let infoCardHTML = renderizarInfoCard();
@@ -470,21 +532,21 @@ async function renderizarAhora(contenedor, datosCuenta) {
         </div>
     `;
     
-    // ========== EVENTO: CLICK EN FILA → REDIRIGIR A PARTIDOS ==========
+    // ========== EVENTO: CLICK EN FILA → REDIRIGIR A PARTIDOS CON SCROLL ==========
     document.querySelectorAll('.ahora-fila').forEach(fila => {
         fila.addEventListener('click', function() {
             if (globalCambiarVistaCallback) {
-                globalCambiarVistaCallback('partidos', currentJugador, null, 'todos');
+                const partidoId = this.dataset.id;
+                // Pasar ID para scroll automático
+                globalCambiarVistaCallback('partidos', currentJugador, null, 'todos', partidoId);
             }
         });
     });
     
-    // ========== INICIAR COUNTDOWN ==========
     if (document.querySelectorAll('.ahora-countdown').length > 0) {
         iniciarCountdownAhora();
     }
     
-    // ========== VISIBILITY HANDLER ==========
     const visibilityHandler = () => {
         if (document.hidden) {
             detenerCountdownAhora();
