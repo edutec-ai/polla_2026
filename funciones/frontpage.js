@@ -1,11 +1,6 @@
 // funciones/frontpage.js
-// VERSIÓN CORREGIDA - CON TIMESTAMP ANTI-CACHE EN TODOS LOS GET
-// CORREGIDO: Los puntos del encabezado ahora muestran pts_par_fnl (solo finales)
-// CORREGIDO: Scroll vertical habilitado en móvil para fp-body-zone-contenido
-// CORREGIDO: Opción "TV" agregada al menú de DESKTOP (NO visible en móvil)
-// CORREGIDO: Al llamar a partidos, se puede especificar pestaña inicial (todos/grupos/colombia)
-// CORREGIDO: La consulta de pronósticos de partidos ahora incluye 'pul' (PULSO)
-// EXPONE FUNCIÓN GLOBAL PARA CAMBIAR DE VISTA DESDE OTROS MÓDULOS
+// VERSIÓN COMPLETA CON HEADER REDISEÑADO Y RESPONSIVE
+// ✅ Eliminada dependencia de cruces.js
 
 import { inicializarMenu } from './menu.js';
 import { renderizarLab, onSimuladorCambio } from './lab.js';
@@ -15,8 +10,10 @@ import { renderizarAdmin, getAdminConfig } from './admin.js';
 import { renderizarPolla } from './polla.js';
 import { renderizarTabla } from './tabla.js';
 import { renderizarAhora, setCambiarVistaCallback as setAhoraCambiarVistaCallback, suscribirAhoraAlSimulador } from './ahora.js';
-import { renderizarReglas, setCambiarVistaCallback as setReglasCallback } from './reglas.js';
+// import { renderizarReglas, setCambiarVistaCallback as setReglasCallback } from './reglas.js';
 import { renderizarTV } from './tv.js';
+// ❌ Eliminada importación de cruces.js
+// import { renderizarCruces } from './cruces.js';
 import { 
   guardarPronosticosPartidosLocal, 
   guardarPronosticosEspecialesLocal,
@@ -37,7 +34,7 @@ function urlWithTimestamp(url) {
   return `${url}${separator}_=${Date.now()}`;
 }
 
-function cambiarVistaPrincipal(opcion, datosCuenta, tabEspecial = null, tabPartidos = null) {
+function cambiarVistaPrincipal(opcion, datosCuenta, tabEspecial = null, tabPartidos = null, scrollToId = null) {
     const contenidoContainer = document.getElementById('fp-body-contenido');
     if (!contenidoContainer) return;
     
@@ -48,7 +45,7 @@ function cambiarVistaPrincipal(opcion, datosCuenta, tabEspecial = null, tabParti
                 renderizarAhora(contenidoContainer, datosCuenta);
                 break;
             case 'partidos':
-                renderizarPartidos(contenidoContainer, datosCuenta, tabPartidos || 'todos');
+                renderizarPartidos(contenidoContainer, datosCuenta, tabPartidos || 'todos', scrollToId);
                 break;
             case 'especiales':
                 if (tabEspecial) {
@@ -57,9 +54,13 @@ function cambiarVistaPrincipal(opcion, datosCuenta, tabEspecial = null, tabParti
                     renderizarEspeciales(contenidoContainer, datosCuenta);
                 }
                 break;
-            case 'reglas':
-                renderizarReglas(contenidoContainer, datosCuenta);
-                break;
+            // ❌ Eliminado case 'cruces'
+            // case 'cruces':
+            //     renderizarCruces(contenidoContainer, datosCuenta);
+            //     break;
+            // case 'reglas':
+            //     renderizarReglas(contenidoContainer, datosCuenta);
+            //     break;
             case 'tabla':
                 renderizarTabla(contenidoContainer, datosCuenta);
                 break;
@@ -95,7 +96,7 @@ async function cargarDatosIniciales(jugadorId) {
     const equiposCache = dataEquipos.fifa_equ || [];
     guardarEquiposCacheLocal(equiposCache);
     
-    const partidosUrl = urlWithTimestamp(`${BASE_V2}/fifa_jug_pro?api_key=${KEY}&filter[id]=${jugadorId}&fields=jug,jug.name,id,ptd,pro_gol_loc,pro_gol_vis,pro_res,pul&filterQuery[ptd.cic]=1`);
+    const partidosUrl = urlWithTimestamp(`${BASE}/fifa_jug_pro?api_key=${KEY}&filter[id]=${jugadorId}&fields=jug,jug.name,id,ptd,pro_gol_loc,pro_gol_vis,pro_res,pul&_=${timestamp}`);
     console.log('[Sync] Fetching partidos:', partidosUrl);
     const responsePartidos = await fetch(partidosUrl);
     if (!responsePartidos.ok) throw new Error('Error cargando partidos');
@@ -195,10 +196,10 @@ export async function cargarFrontpage(datosCuenta) {
   const contenidoContainer = document.getElementById('fp-body-contenido');
   if (contenidoContainer) {
     contenidoContainer.innerHTML = `
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:300px;">
-        <div style="width:40px;height:40px;border:3px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
-        <div style="margin-top:16px;color:white;font-size:14px;">Cargando tus pronósticos...</div>
-        <div style="margin-top:8px;color:rgba(255,255,255,0.5);font-size:11px;">Sincronizando con Velneo</div>
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:200px;">
+        <div style="width:clamp(30px, 5vw, 50px);height:clamp(30px, 5vw, 50px);border:3px solid rgba(255,255,255,0.3);border-top-color:#f5c842;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+        <div style="margin-top:clamp(12px, 2vh, 20px);color:white;font-size:clamp(12px, 2vw, 16px);">Cargando tus pronósticos...</div>
+        <div style="margin-top:clamp(6px, 1vh, 10px);color:rgba(255,255,255,0.5);font-size:clamp(10px, 1.5vw, 14px);">Sincronizando con Velneo</div>
       </div>
       <style>
         @keyframes spin {
@@ -215,7 +216,6 @@ export async function cargarFrontpage(datosCuenta) {
       await cargarDatosIniciales(jugadorId);
       console.log('[Frontpage] Datos cargados exitosamente, procediendo a renderizar');
       
-      // 🔥 CAMBIO: Consultar pts_par_fnl (puntos de finales) en lugar de pts
       const puntosUrl = urlWithTimestamp(`${BASE}/fifa_jug?api_key=${KEY}&filter[id]=${jugadorId}`);
       const responsePuntos = await fetch(puntosUrl);
       if (responsePuntos.ok) {
@@ -230,10 +230,10 @@ export async function cargarFrontpage(datosCuenta) {
       console.error('[Frontpage] Error cargando datos:', error);
       if (contenidoContainer) {
         contenidoContainer.innerHTML = `
-          <div style="text-align:center;padding:40px;color:#ff6b6b;">
-            <div>⚠️</div>
-            <div style="margin-top:12px;">Error al sincronizar con Velneo</div>
-            <div style="margin-top:8px;font-size:12px;">Los datos mostrados podrían estar desactualizados</div>
+          <div style="text-align:center;padding:clamp(20px, 5vh, 40px);color:#ff6b6b;font-size:clamp(12px, 1.8vw, 16px);">
+            <div style="font-size:clamp(30px, 5vw, 48px);">⚠️</div>
+            <div style="margin-top:clamp(10px, 2vh, 16px);">Error al sincronizar con Velneo</div>
+            <div style="margin-top:clamp(6px, 1vh, 10px);font-size:clamp(10px, 1.4vw, 14px);">Los datos mostrados podrían estar desactualizados</div>
           </div>
         `;
       }
@@ -244,11 +244,11 @@ export async function cargarFrontpage(datosCuenta) {
   
   onSimuladorCambio((fecha, hora) => console.log('📅 Simulador actualizado:', fecha, hora));
   
-  globalCambiarVista = (opcion, cuenta, tabEspecial = null, tabPartidos = null) => 
-    cambiarVistaPrincipal(opcion, cuenta, tabEspecial, tabPartidos);
+  globalCambiarVista = (opcion, cuenta, tabEspecial = null, tabPartidos = null, scrollToId = null) => 
+    cambiarVistaPrincipal(opcion, cuenta, tabEspecial, tabPartidos, scrollToId);
   
   setAhoraCambiarVistaCallback(globalCambiarVista);
-  setReglasCallback(globalCambiarVista);
+  // setReglasCallback(globalCambiarVista);
   setGlobalCambiarVistaCallback(globalCambiarVista);
   
   suscribirAhoraAlSimulador();
@@ -259,7 +259,6 @@ export async function cargarFrontpage(datosCuenta) {
   
   const idCuenta = datosCuenta.id || '—';
   const nombreCuenta = datosCuenta.name || datosCuenta.nombre || 'Cuenta';
-  // 🔥 CAMBIO: Usar puntosReales (que ahora es pts_par_fnl)
   const puntosCuenta = puntosReales || datosCuenta.ptr || datosCuenta.pun || 0;
   const usrAsociado = datosCuenta.usr || '—';
   const estadoCuenta = datosCuenta.off ? 'Inactiva' : 'Activa';
@@ -270,7 +269,21 @@ export async function cargarFrontpage(datosCuenta) {
   const colorFinal = paletaColoresFijos[hashSuma % paletaColoresFijos.length];
   const inicial = nombreCuenta.charAt(0).toUpperCase();
 
-  frontpageCard.style.cssText = 'max-width:100%;width:calc(100vw - 32px);height:calc(100dvh - 32px);border-radius:20px;background:rgba(255,255,255,0.12);backdrop-filter:blur(30px);border:1px solid rgba(255,255,255,0.18);display:flex;flex-direction:column;padding:0;overflow:visible;';
+  frontpageCard.style.cssText = `
+    max-width:100%;
+    width:calc(100vw - clamp(8px, 2vw, 20px));
+    height:calc(100dvh - clamp(8px, 2vh, 20px));
+    border-radius:clamp(16px, 2.5vh, 28px);
+    background:rgba(255,255,255,0.08);
+    backdrop-filter:blur(30px);
+    -webkit-backdrop-filter:blur(30px);
+    border:1px solid rgba(255,255,255,0.12);
+    display:flex;
+    flex-direction:column;
+    padding:0;
+    overflow:hidden;
+    box-sizing:border-box;
+  `;
   
   frontpageCard.innerHTML = `
     <style>
@@ -278,61 +291,82 @@ export async function cargarFrontpage(datosCuenta) {
         display:flex; 
         align-items:center; 
         justify-content:space-between; 
-        padding:14px 24px; 
+        padding:clamp(8px, 1.5vh, 16px) clamp(12px, 2.5vw, 24px); 
         background:rgba(0,0,0,0.25); 
         border-bottom:2px solid ${colorFinal}; 
         flex-wrap:wrap; 
-        gap:12px; 
+        gap:clamp(4px, 1vw, 12px); 
+        flex-shrink:0;
+        min-height:clamp(50px, 8vh, 70px);
       }
-      .fp-header-left { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
-      .fp-avatar-emblema { 
-        width:40px; 
-        height:40px; 
-        border-radius:50%; 
-        background:${colorFinal}; 
+      
+      .fp-header-left { 
         display:flex; 
-        align-items:center; 
-        justify-content:center; 
-        color:white; 
-        font-weight:700; 
-        font-size:1.1rem; 
+        flex-direction:column;
+        align-items:flex-start;
+        gap:clamp(1px, 0.3vh, 4px);
+        flex:1;
+        min-width:0;
       }
+      
       .fp-nombre-cuenta { 
-        font-size:1.1rem; 
+        font-size:clamp(14px, 2.8vw, 24px); 
         font-weight:700; 
-        color:#fff; 
+        color:#fff;
+        line-height:1.2;
+        word-break:break-word;
+        max-width:100%;
       }
+      
       .fp-puntos-cuenta {
-        font-size:0.9rem;
+        font-size:clamp(12px, 2.2vw, 18px);
         font-weight:700;
         color:#ffd60a;
-        margin-top:2px;
+        line-height:1.2;
       }
-      .fp-id-cuenta { font-size:0.75rem; color:rgba(255,255,255,0.4); margin-left:6px; }
-      .fp-linea-tres { font-size:0.8rem; color:rgba(255,255,255,0.5); }
-      .fp-status-badge { color:#34c759; }
+      
+      .fp-linea-tres { 
+        font-size:clamp(9px, 1.4vw, 14px); 
+        color:rgba(255,255,255,0.5);
+        line-height:1.2;
+      }
+      
+      .fp-status-badge { 
+        color:#34c759; 
+      }
+      
+      .fp-id-cuenta { 
+        font-size:clamp(9px, 1.4vw, 14px); 
+        color:rgba(255,255,255,0.4);
+        margin-left:clamp(2px, 0.5vw, 6px);
+      }
       
       .fp-header-actions {
-        display: flex;
-        align-items: center;
-        gap: 12px;
+        display:flex;
+        align-items:center;
+        gap:clamp(6px, 1vw, 12px);
+        flex-shrink:0;
       }
       
       .fp-btn-header { 
-        padding:8px 16px; 
+        padding:clamp(6px, 1vh, 10px) clamp(10px, 1.8vw, 18px); 
         background:rgba(255,255,255,0.08); 
         border:1px solid rgba(255,255,255,0.12); 
-        border-radius:10px; 
+        border-radius:clamp(8px, 1.2vh, 14px); 
         color:#fff; 
         cursor:pointer;
         transition: all 0.2s ease;
-        font-size: 14px;
-        font-weight: 500;
+        font-size:clamp(10px, 1.6vw, 15px);
+        font-weight:500;
+        white-space:nowrap;
+        line-height:1.2;
       }
+      
       .fp-btn-header:hover { 
         background:rgba(255,255,255,0.15); 
         transform:scale(1.02); 
       }
+      
       .fp-btn-header:active {
         transform: scale(0.98);
       }
@@ -340,8 +374,8 @@ export async function cargarFrontpage(datosCuenta) {
       .fp-content-body { 
         flex: 1; 
         display: flex; 
-        gap: 12px; 
-        padding: 12px; 
+        gap: clamp(6px, 1vw, 12px); 
+        padding: clamp(6px, 1vw, 12px); 
         overflow: hidden;
         min-height: 0;
       }
@@ -355,12 +389,12 @@ export async function cargarFrontpage(datosCuenta) {
       
       @media (min-width: 769px) {
         .fp-body-zone-menu { 
-          width: 280px;
+          width: clamp(200px, 22vw, 280px);
           flex-shrink: 0;
           background: rgba(0,0,0,0.15); 
-          padding: 20px 14px; 
-          border: 2px solid #fff; 
-          border-radius: 20px; 
+          padding: clamp(10px, 1.5vh, 20px) clamp(8px, 1.2vw, 14px); 
+          border: 2px solid rgba(255,255,255,0.2); 
+          border-radius: clamp(12px, 2vh, 20px); 
           overflow-y: auto; 
         }
         .fp-body-zone-contenido { 
@@ -369,8 +403,8 @@ export async function cargarFrontpage(datosCuenta) {
           min-height: 0;
           background: rgba(0,0,0,0.1); 
           padding: 0px; 
-          border: 2px solid #fff; 
-          border-radius: 20px; 
+          border: 2px solid rgba(255,255,255,0.2); 
+          border-radius: clamp(12px, 2vh, 20px); 
           overflow-y: auto;
           overflow-x: hidden;
         }
@@ -382,8 +416,8 @@ export async function cargarFrontpage(datosCuenta) {
       @media (max-width: 768px) {
         .fp-content-body { 
           flex-direction: column; 
-          gap: 8px; 
-          padding: 8px; 
+          gap: clamp(4px, 0.8vw, 8px); 
+          padding: clamp(4px, 0.8vw, 8px); 
         }
         .fp-body-zone-menu { 
           display: none !important;
@@ -395,8 +429,8 @@ export async function cargarFrontpage(datosCuenta) {
           height: 100%;
           background: rgba(0,0,0,0.1); 
           padding: 0px; 
-          border: 2px solid #fff; 
-          border-radius: 20px; 
+          border: 2px solid rgba(255,255,255,0.2); 
+          border-radius: clamp(10px, 1.8vh, 16px); 
           overflow-y: auto;
           overflow-x: hidden;
           -webkit-overflow-scrolling: touch;
@@ -406,10 +440,11 @@ export async function cargarFrontpage(datosCuenta) {
           display: flex !important;
           flex-direction: row !important;
           justify-content: center;
-          gap: 8px;
+          gap: clamp(2px, 0.4vw, 6px);
           background: transparent;
           padding: 0;
-          margin: 0 0 16px 0;
+          margin: 0 0 clamp(4px, 0.6vh, 8px) 0;
+          flex-shrink:0;
         }
         
         .mobile-tab-item {
@@ -417,15 +452,16 @@ export async function cargarFrontpage(datosCuenta) {
           flex-direction: column !important;
           justify-content: center;
           align-items: center;
-          gap: 6px;
+          gap: clamp(1px, 0.2vh, 4px);
           background: rgba(0, 0, 0, 0.25);
           backdrop-filter: blur(10px);
-          border-radius: 16px;
-          padding: 10px 8px;
+          border-radius: clamp(10px, 1.8vh, 16px);
+          padding: clamp(6px, 1vh, 10px) clamp(4px, 0.8vw, 8px);
           flex: 1;
           text-align: center;
           cursor: pointer;
           transition: all 0.2s ease;
+          min-width: 0;
         }
         
         .mobile-tab-item.active {
@@ -434,15 +470,17 @@ export async function cargarFrontpage(datosCuenta) {
         }
         
         .mobile-tab-icono {
-          font-size: 22px;
+          font-size: clamp(16px, 3.5vw, 28px);
+          line-height:1;
         }
         
         .mobile-tab-label {
-          font-size: 10px;
+          font-size: clamp(7px, 1.4vw, 11px);
           font-weight: 600;
           color: #fff;
           text-transform: uppercase;
           letter-spacing: 0.3px;
+          line-height:1.1;
         }
       }
       
@@ -469,31 +507,43 @@ export async function cargarFrontpage(datosCuenta) {
         box-shadow: 0 8px 20px rgba(0,0,0,0.15);
         min-width: 200px;
       }
+      
       body, html {
-        overflow: visible !important;
-        height: auto !important;
+        overflow: hidden !important;
+        height: 100% !important;
         min-height: 100% !important;
+        max-height: 100% !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0;
+        padding: 0;
+      }
+      
+      #app-root {
+        height: 100dvh !important;
+        width: 100vw !important;
+        max-height: 100dvh !important;
+        max-width: 100vw !important;
+        overflow: hidden !important;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
     </style>
     
     <header class="fp-header-premium">
       <div class="fp-header-left">
-        <div class="fp-avatar-emblema">${inicial}</div>
-        <div>
-          <div class="fp-nombre-wrapper">
-            <span class="fp-nombre-cuenta">${nombreCuenta}</span>
-            ${adminConfig.mostrarIdCuenta && esAdmin ? `<span class="fp-id-cuenta">#${idCuenta}</span>` : ''}
-          </div>
-          <div class="fp-puntos-cuenta">🏆 ${puntosCuenta} pts</div>
-          <div class="fp-linea-tres">
-            ${adminConfig.mostrarIdVelneo && esAdmin ? `Usuario: ${usrAsociado} · ` : ''}
-            ${adminConfig.mostrarEstado && esAdmin ? `<span class="fp-status-badge">${estadoCuenta}</span>` : ''}
-          </div>
+        <div class="fp-nombre-wrapper" style="display:flex;align-items:center;flex-wrap:wrap;gap:clamp(2px,0.4vw,6px);">
+          <span class="fp-nombre-cuenta">${nombreCuenta}</span>
+          ${adminConfig.mostrarIdCuenta && esAdmin ? `<span class="fp-id-cuenta">#${idCuenta}</span>` : ''}
         </div>
+        <div class="fp-puntos-cuenta">🏆 ${puntosCuenta} pts</div>
+        ${adminConfig.mostrarIdVelneo && esAdmin ? `<div class="fp-linea-tres">Usuario: ${usrAsociado} · ${adminConfig.mostrarEstado && esAdmin ? `<span class="fp-status-badge">${estadoCuenta}</span>` : ''}</div>` : ''}
+        ${!adminConfig.mostrarIdVelneo && adminConfig.mostrarEstado && esAdmin ? `<div class="fp-linea-tres"><span class="fp-status-badge">${estadoCuenta}</span></div>` : ''}
       </div>
       <div class="fp-header-actions">
-        ${esAdmin ? `<button class="fp-btn-header" id="btnAdminFrontpage">🔧 Admin</button>` : ''}
-        <button class="fp-btn-header" id="btnRegresarFrontpage">↩️ Regresar</button>
+        ${esAdmin ? `<button class="fp-btn-header" id="btnAdminFrontpage">🔧</button>` : ''}
+        <button class="fp-btn-header" id="btnRegresarFrontpage">↩️</button>
       </div>
     </header>
     
@@ -505,12 +555,15 @@ export async function cargarFrontpage(datosCuenta) {
     </div>
   `;
 
+  // ✅ OPCIONES DEL MENÚ - CRUCES ELIMINADO
   const opcionesMenu = [
     { id: 'ahora', nombre: 'AHORA', color: '#34c759', icono: '🏠' },
     { id: 'partidos', nombre: 'PARTIDOS', color: '#007aff', icono: '⚽' },
     { id: 'especiales', nombre: 'ESPECIALES', color: '#af52de', icono: '⭐' },
+    // ❌ CRUCES eliminado - no existe el archivo
+    // { id: 'cruces', nombre: 'CRUCES', color: '#f5c842', icono: '🏆' },
+    // { id: 'reglas', nombre: 'REGLAS', color: '#5856d6', icono: '📖' },
     { id: 'tabla', nombre: 'TABLA', color: '#ff9500', icono: '📊' },
-    { id: 'reglas', nombre: 'REGLAS', color: '#5856d6', icono: '📖' },
     { id: 'tv', nombre: 'TV', color: '#e74c3c', icono: '📺' }
   ];
   
@@ -538,12 +591,15 @@ export async function cargarFrontpage(datosCuenta) {
   
   const mobileTabBar = document.getElementById('mobile-tab-bar');
   if (mobileTabBar) {
+    // ✅ OPCIONES MÓVIL - CRUCES ELIMINADO
     const opcionesMovil = [
       { id: 'ahora', icono: '🏠', label: 'AHORA' },
       { id: 'partidos', icono: '⚽', label: 'PARTIDOS' },
       { id: 'especiales', icono: '⭐', label: 'ESPECIALES' },
-      { id: 'tabla', icono: '📊', label: 'TABLA' },
-      { id: 'reglas', icono: '📖', label: 'REGLAS' }
+      // ❌ CRUCES eliminado
+      // { id: 'cruces', icono: '🏆', label: 'CRUCES' },
+      // { id: 'reglas', icono: '📖', label: 'REGLAS' },
+      { id: 'tabla', icono: '📊', label: 'TABLA' }
     ];
     
     mobileTabBar.innerHTML = opcionesMovil.map(op => `
