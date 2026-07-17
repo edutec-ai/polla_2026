@@ -1,6 +1,7 @@
 // funciones/frontpage.js
 // VERSIÓN COMPLETA CON HEADER REDISEÑADO Y RESPONSIVE
-// ✅ Eliminada dependencia de cruces.js
+// ✅ CORREGIDO: Muestra pts_par_fnl (puntos de fase final) en el header
+// ✅ CORREGIDO: Coincide con el login
 
 import { inicializarMenu } from './menu.js';
 import { renderizarLab, onSimuladorCambio } from './lab.js';
@@ -10,10 +11,7 @@ import { renderizarAdmin, getAdminConfig } from './admin.js';
 import { renderizarPolla } from './polla.js';
 import { renderizarTabla } from './tabla.js';
 import { renderizarAhora, setCambiarVistaCallback as setAhoraCambiarVistaCallback, suscribirAhoraAlSimulador } from './ahora.js';
-// import { renderizarReglas, setCambiarVistaCallback as setReglasCallback } from './reglas.js';
 import { renderizarTV } from './tv.js';
-// ❌ Eliminada importación de cruces.js
-// import { renderizarCruces } from './cruces.js';
 import { 
   guardarPronosticosPartidosLocal, 
   guardarPronosticosEspecialesLocal,
@@ -54,13 +52,6 @@ function cambiarVistaPrincipal(opcion, datosCuenta, tabEspecial = null, tabParti
                     renderizarEspeciales(contenidoContainer, datosCuenta);
                 }
                 break;
-            // ❌ Eliminado case 'cruces'
-            // case 'cruces':
-            //     renderizarCruces(contenidoContainer, datosCuenta);
-            //     break;
-            // case 'reglas':
-            //     renderizarReglas(contenidoContainer, datosCuenta);
-            //     break;
             case 'tabla':
                 renderizarTabla(contenidoContainer, datosCuenta);
                 break;
@@ -96,7 +87,7 @@ async function cargarDatosIniciales(jugadorId) {
     const equiposCache = dataEquipos.fifa_equ || [];
     guardarEquiposCacheLocal(equiposCache);
     
-    const partidosUrl = urlWithTimestamp(`${BASE}/fifa_jug_pro?api_key=${KEY}&filter[id]=${jugadorId}&fields=jug,jug.name,id,ptd,pro_gol_loc,pro_gol_vis,pro_res,pul&_=${timestamp}`);
+    const partidosUrl = urlWithTimestamp(`${BASE}/fifa_jug_pro?api_key=${KEY}&filter[id]=${jugadorId}&fields=jug,jug.name,id,ptd,pro_gol_loc,pro_gol_vis,pro_res,pul&_=${Date.now()}`);
     console.log('[Sync] Fetching partidos:', partidosUrl);
     const responsePartidos = await fetch(partidosUrl);
     if (!responsePartidos.ok) throw new Error('Error cargando partidos');
@@ -221,8 +212,9 @@ export async function cargarFrontpage(datosCuenta) {
       if (responsePuntos.ok) {
         const dataPuntos = await responsePuntos.json();
         const jugadorActualizado = dataPuntos.fifa_jug?.[0];
-        if (jugadorActualizado && jugadorActualizado.pts_par_fnl !== undefined) {
-          puntosReales = jugadorActualizado.pts_par_fnl;
+        if (jugadorActualizado) {
+          // ✅ Usar pts_par_fnl (puntos de fase final) para coincidir con el login
+          puntosReales = jugadorActualizado.pts_par_fnl || 0;
           console.log('[Frontpage] Puntos de finales (pts_par_fnl):', puntosReales);
         }
       }
@@ -248,7 +240,6 @@ export async function cargarFrontpage(datosCuenta) {
     cambiarVistaPrincipal(opcion, cuenta, tabEspecial, tabPartidos, scrollToId);
   
   setAhoraCambiarVistaCallback(globalCambiarVista);
-  // setReglasCallback(globalCambiarVista);
   setGlobalCambiarVistaCallback(globalCambiarVista);
   
   suscribirAhoraAlSimulador();
@@ -259,7 +250,10 @@ export async function cargarFrontpage(datosCuenta) {
   
   const idCuenta = datosCuenta.id || '—';
   const nombreCuenta = datosCuenta.name || datosCuenta.nombre || 'Cuenta';
+  
+  // ✅ Usar pts_par_fnl para coincidir con el login
   const puntosCuenta = puntosReales || datosCuenta.ptr || datosCuenta.pun || 0;
+  
   const usrAsociado = datosCuenta.usr || '—';
   const estadoCuenta = datosCuenta.off ? 'Inactiva' : 'Activa';
   
@@ -267,7 +261,6 @@ export async function cargarFrontpage(datosCuenta) {
   let hashSuma = 0;
   for (let i = 0; i < nombreCuenta.length; i++) hashSuma += nombreCuenta.charCodeAt(i);
   const colorFinal = paletaColoresFijos[hashSuma % paletaColoresFijos.length];
-  const inicial = nombreCuenta.charAt(0).toUpperCase();
 
   frontpageCard.style.cssText = `
     max-width:100%;
@@ -555,14 +548,10 @@ export async function cargarFrontpage(datosCuenta) {
     </div>
   `;
 
-  // ✅ OPCIONES DEL MENÚ - CRUCES ELIMINADO
   const opcionesMenu = [
     { id: 'ahora', nombre: 'AHORA', color: '#34c759', icono: '🏠' },
     { id: 'partidos', nombre: 'PARTIDOS', color: '#007aff', icono: '⚽' },
     { id: 'especiales', nombre: 'ESPECIALES', color: '#af52de', icono: '⭐' },
-    // ❌ CRUCES eliminado - no existe el archivo
-    // { id: 'cruces', nombre: 'CRUCES', color: '#f5c842', icono: '🏆' },
-    // { id: 'reglas', nombre: 'REGLAS', color: '#5856d6', icono: '📖' },
     { id: 'tabla', nombre: 'TABLA', color: '#ff9500', icono: '📊' },
     { id: 'tv', nombre: 'TV', color: '#e74c3c', icono: '📺' }
   ];
@@ -591,14 +580,10 @@ export async function cargarFrontpage(datosCuenta) {
   
   const mobileTabBar = document.getElementById('mobile-tab-bar');
   if (mobileTabBar) {
-    // ✅ OPCIONES MÓVIL - CRUCES ELIMINADO
     const opcionesMovil = [
       { id: 'ahora', icono: '🏠', label: 'AHORA' },
       { id: 'partidos', icono: '⚽', label: 'PARTIDOS' },
       { id: 'especiales', icono: '⭐', label: 'ESPECIALES' },
-      // ❌ CRUCES eliminado
-      // { id: 'cruces', icono: '🏆', label: 'CRUCES' },
-      // { id: 'reglas', icono: '📖', label: 'REGLAS' },
       { id: 'tabla', icono: '📊', label: 'TABLA' }
     ];
     
