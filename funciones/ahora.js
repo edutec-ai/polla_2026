@@ -1,13 +1,10 @@
 // ahora.js - Módulo de partidos de hoy
-// VERSIÓN 3 COLUMNAS - Tabla: LOCAL | VS | VISITANTE
-// - Lista plana de partidos (sin agrupación por grupo/hora)
-// - Scroll vertical DENTRO de la card
-// - SIN scroll horizontal
+// VERSIÓN REDISEÑADA - Pantalla de cierre del Mundial 2026
+// - Muestra los 4 finalistas con sus posiciones
+// - Header: "GRACIAS" con mensaje de agradecimiento
+// - Orden: Final (España-Argentina) primero, 3er Puesto (Inglaterra-Francia) segundo
+// - Footer: "Consulta la tabla de posiciones"
 // - Click → redirige a partidos.js con tab='todos' y scroll al partido
-// - MOCK INTELIGENTE: solo se muestra si NO hay partidos reales en la API
-// - Countdown para partidos pendientes
-// - CARD INFORMATIVA: explica 90 minutos + alargue + puntos extra
-// - CORREGIDO: Orden específico: 103 (3er Puesto) primero, luego 104 (Final)
 
 import { getBandera } from './banderas.js';
 
@@ -89,17 +86,26 @@ async function cargarPartidosHoy() {
             
             if (hoyFiltered.length > 0) {
                 console.log(`[Ahora] ✅ Encontrados partidos 103 y 104`);
+                hoyFiltered.forEach(p => {
+                    console.log(`   - ${p.nom_loc} vs ${p.nom_vis} (id=${p.id}, fas=${p.fas})`);
+                });
             }
         }
         
-        // ORDEN ESPECÍFICO: 103 (3er Puesto) primero, luego 104 (Final)
+        // TERCERO: si aún no hay partidos, usar mock
+        if (hoyFiltered.length === 0) {
+            console.log('[Ahora] ⚠️ No se encontraron partidos, usando mock');
+            return generarMockPartidos();
+        }
+        
+        // ORDEN ESPECÍFICO: 104 (FINAL) primero, luego 103 (3er Puesto)
+        // pero intercambiando local/visita para que Inglaterra-Francia quede como local Inglaterra
         hoyFiltered.sort((a, b) => {
             const idA = Number(a.id);
             const idB = Number(b.id);
-            // 103 va antes que 104
-            if (idA === 103 && idB === 104) return -1;
-            if (idA === 104 && idB === 103) return 1;
-            // Si no son 103/104, ordenar por hora
+            // 104 (FINAL) va primero
+            if (idA === 104 && idB === 103) return -1;
+            if (idA === 103 && idB === 104) return 1;
             return (a.hor || '00:00:00').localeCompare(b.hor || '00:00:00');
         });
         
@@ -216,55 +222,36 @@ function detenerCountdownAhora() {
 function generarMockPartidos() {
     const hoy = getLocalDate();
     return [
-        { id: 9991, nom_loc: 'Suiza', nom_vis: 'Canadá', fch: hoy, hor: '14:00:00', est: '1', grp_for: 'B', fas: '1' },
-        { id: 9992, nom_loc: 'Bosnia', nom_vis: 'Catar', fch: hoy, hor: '14:00:00', est: '1', grp_for: 'B', fas: '1' },
-        { id: 9993, nom_loc: 'Escocia', nom_vis: 'Brasil', fch: hoy, hor: '17:00:00', est: '1', grp_for: 'C', fas: '1' },
-        { id: 9994, nom_loc: 'Marruecos', nom_vis: 'Haití', fch: hoy, hor: '17:00:00', est: '1', grp_for: 'C', fas: '1' },
-        { id: 9995, nom_loc: 'República Checa', nom_vis: 'México', fch: hoy, hor: '20:00:00', est: '1', grp_for: 'A', fas: '1' },
-        { id: 9996, nom_loc: 'Sudáfrica', nom_vis: 'República de Corea', fch: hoy, hor: '20:00:00', est: '1', grp_for: 'A', fas: '1' }
+        // FINAL: España vs Argentina (primero)
+        { id: 104, nom_loc: 'España', nom_vis: 'Argentina', fch: hoy, hor: '18:00:00', est: '4', grp_for: 'FINAL', fas: '7', t90_gol_loc: 0, t90_gol_vis: 0 },
+        // 3er PUESTO: Inglaterra vs Francia (segundo)
+        { id: 103, nom_loc: 'Inglaterra', nom_vis: 'Francia', fch: hoy, hor: '14:00:00', est: '4', grp_for: '3er Puesto', fas: '6', t90_gol_loc: 4, t90_gol_vis: 6 }
     ];
 }
 
-// ========== RENDERIZAR CARD INFORMATIVA ==========
-function renderizarInfoCard() {
-    return `
-        <div style="
-            background: rgba(0, 122, 255, 0.05);
-            border: 1px solid rgba(0, 122, 255, 0.10);
-            border-radius: 12px;
-            padding: 10px 14px;
-            margin: 6px 12px 10px 12px;
-            font-size: 11px;
-            color: #1c1c1e;
-            line-height: 1.5;
-        ">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
-                <span style="font-size: 14px;">📋</span>
-                <span style="font-weight: 700; color: #007aff; font-size: 12px;">¿Cómo funciona el pronóstico?</span>
-            </div>
-            <div style="padding-left: 4px;">
-                ⚽ El marcador que pronostiques es para el partido de <strong>90 minutos</strong>.
-                <br>
-                ⭐ En fases finales (16avos en adelante), si el partido termina empatado, 
-                podrás elegir qué equipo avanza en el <strong>alargue</strong>.
-                <br>
-                ✅ Si aciertas quién avanza, sumas <strong style="color: #f1c40f;">puntos extra</strong>.
-            </div>
-        </div>
-    `;
-}
-
-// ========== RENDERIZAR FILA DE PARTIDO ==========
-function renderizarFila(partido) {
+// ========== RENDERIZAR FILA DE PARTIDO (3 COLUMNAS) ==========
+function renderizarFila(partido, posicion) {
     const estado = getEstadoPartido(partido);
     const horaFormateada = formatearHora12h(partido.hor);
     const countdown = calcularCountdown(partido.fch?.split('T')[0], partido.hor);
     
     let faseBadge = '';
+    let textoPosicionLocal = '';
+    let textoPosicionVisita = '';
     const fas = Number(partido.fas);
-    if (fas === 6) faseBadge = '🥉 3er Puesto';
-    else if (fas === 7) faseBadge = '🏆 FINAL';
-    else if (fas >= 2) faseBadge = `⚡ Fase ${fas}`;
+    const id = Number(partido.id);
+    
+    if (id === 104) {
+        faseBadge = '🏆 FINAL';
+        textoPosicionLocal = '(Campeón)';
+        textoPosicionVisita = '(Subcampeón)';
+    } else if (id === 103) {
+        faseBadge = '🥉 3er Puesto';
+        textoPosicionLocal = '(Tercer puesto)';
+        textoPosicionVisita = '(Cuarto puesto)';
+    } else if (fas >= 2) {
+        faseBadge = `⚡ Fase ${fas}`;
+    }
     
     let vsContent = '';
     
@@ -277,7 +264,7 @@ function renderizarFila(partido) {
                 <span style="font-size: 10px;">${estado.badgeIcono}</span>
                 <span style="font-size: 10px; font-weight: 600; color: ${estado.badgeColor};">${estado.badge}</span>
             </div>
-            ${faseBadge ? `<div style="font-size: 8px; color: #8e8e93; margin-top: 2px;">${faseBadge}</div>` : ''}
+            ${faseBadge ? `<div style="font-size: 8px; color: #8e8e93; margin-top: 2px; font-weight:600;">${faseBadge}</div>` : ''}
         `;
     } else if (estado.tipo === 'envivo') {
         vsContent = `
@@ -288,21 +275,21 @@ function renderizarFila(partido) {
                 <span style="font-size: 10px;">${estado.badgeIcono}</span>
                 <span style="font-size: 10px; font-weight: 600; color: ${estado.badgeColor};">${estado.badge}</span>
             </div>
-            ${faseBadge ? `<div style="font-size: 8px; color: #8e8e93; margin-top: 2px;">${faseBadge}</div>` : ''}
+            ${faseBadge ? `<div style="font-size: 8px; color: #8e8e93; margin-top: 2px; font-weight:600;">${faseBadge}</div>` : ''}
         `;
     } else if (countdown) {
         vsContent = `
             <div style="font-weight: 600; color: #8e8e93; font-size: 11px; margin-bottom: 4px;">VS</div>
             <div style="font-size: 13px; font-weight: 600; color: #007aff; margin-bottom: 4px;">${horaFormateada}</div>
             <div class="ahora-countdown" data-fch="${partido.fch?.split('T')[0]}" data-hor="${partido.hor}" style="font-size: 11px; font-weight: 600; color: #ff9500;">${countdown}</div>
-            ${faseBadge ? `<div style="font-size: 8px; color: #8e8e93; margin-top: 2px;">${faseBadge}</div>` : ''}
+            ${faseBadge ? `<div style="font-size: 8px; color: #8e8e93; margin-top: 2px; font-weight:600;">${faseBadge}</div>` : ''}
         `;
     } else {
         vsContent = `
             <div style="font-weight: 600; color: #8e8e93; font-size: 11px; margin-bottom: 4px;">VS</div>
             <div style="font-size: 13px; font-weight: 600; color: #007aff; margin-bottom: 4px;">${horaFormateada}</div>
             <div style="font-size: 10px; color: #8e8e93;">PENDIENTE</div>
-            ${faseBadge ? `<div style="font-size: 8px; color: #8e8e93; margin-top: 2px;">${faseBadge}</div>` : ''}
+            ${faseBadge ? `<div style="font-size: 8px; color: #8e8e93; margin-top: 2px; font-weight:600;">${faseBadge}</div>` : ''}
         `;
     }
     
@@ -315,6 +302,7 @@ function renderizarFila(partido) {
                 <div style="display: flex; flex-direction: column; align-items: center; gap: 3px;">
                     <span style="font-size: 32px;">${getBandera(partido.nom_loc)}</span>
                     <span style="font-weight: 600; color: #1c1c1e; font-size: 12px;">${nombreLocal}</span>
+                    <span style="font-size: 9px; color: #8e8e93; font-weight: 500;">${textoPosicionLocal}</span>
                 </div>
             </td>
             <td style="padding: 10px 6px; text-align: center; vertical-align: middle;">
@@ -324,6 +312,7 @@ function renderizarFila(partido) {
                 <div style="display: flex; flex-direction: column; align-items: center; gap: 3px;">
                     <span style="font-size: 32px;">${getBandera(partido.nom_vis)}</span>
                     <span style="font-weight: 600; color: #1c1c1e; font-size: 12px;">${nombreVisita}</span>
+                    <span style="font-size: 9px; color: #8e8e93; font-weight: 500;">${textoPosicionVisita}</span>
                 </div>
             </td>
         </tr>
@@ -356,9 +345,9 @@ async function renderizarAhora(contenedor, datosCuenta) {
         partidosHoy = generarMockPartidos();
         console.log('🧪 MODO PRUEBA - Usando mock');
     } else {
-        console.log(`✅ ${partidosHoy.length} partidos reales cargados`);
+        console.log(`✅ ${partidosHoy.length} partidos reales cargados desde la API`);
         partidosHoy.forEach(p => {
-            console.log(`   📅 ${p.nom_loc} vs ${p.nom_vis} (id=${p.id}, fas=${p.fas})`);
+            console.log(`   📅 ${p.nom_loc} vs ${p.nom_vis} (id=${p.id}, fas=${p.fas}, est=${p.est})`);
         });
     }
     
@@ -372,8 +361,7 @@ async function renderizarAhora(contenedor, datosCuenta) {
         return;
     }
     
-    let filasHtml = partidosHoy.map(p => renderizarFila(p)).join('');
-    let infoCardHTML = renderizarInfoCard();
+    let filasHtml = partidosHoy.map((p, index) => renderizarFila(p, index)).join('');
     
     contenedor.innerHTML = `
         <style>
@@ -397,10 +385,16 @@ async function renderizarAhora(contenedor, datosCuenta) {
                 background: rgba(255, 255, 255, 0.02);
             }
             .ahora-titulo {
-                font-size: 16px;
+                font-size: 20px;
                 font-weight: 700;
                 color: #1c1c1e;
-                margin-bottom: 2px;
+                margin-bottom: 0px;
+            }
+            .ahora-subtitulo {
+                font-size: 13px;
+                font-weight: 500;
+                color: #8e8e93;
+                margin-top: 2px;
             }
             .ahora-badge {
                 display: inline-block;
@@ -411,6 +405,7 @@ async function renderizarAhora(contenedor, datosCuenta) {
                 font-size: 10px;
                 font-weight: 600;
                 letter-spacing: 0.5px;
+                margin-top: 4px;
             }
             .ahora-tabla-wrapper {
                 overflow-y: auto;
@@ -465,11 +460,34 @@ async function renderizarAhora(contenedor, datosCuenta) {
                 padding: 10px;
                 text-align: center;
                 border-top: 1px solid rgba(0, 0, 0, 0.04);
-                font-size: 9px;
-                color: rgba(0, 0, 0, 0.2);
+                font-size: 11px;
+                color: #007aff;
+                font-weight: 500;
                 flex-shrink: 0;
                 letter-spacing: 0.3px;
                 background: rgba(255, 255, 255, 0.02);
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+            .ahora-footer:hover {
+                background: rgba(0, 122, 255, 0.05);
+            }
+            .ahora-footer:active {
+                transform: scale(0.98);
+            }
+            .titulo-finalistas {
+                text-align: center;
+                font-size: 14px;
+                font-weight: 700;
+                color: #1c1c1e;
+                padding: 12px 0 8px 0;
+                letter-spacing: 0.5px;
+            }
+            .titulo-finalistas span {
+                background: linear-gradient(135deg, #f5c842 0%, #f5a623 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
             }
             @media (max-width: 600px) {
                 .ahora-container {
@@ -488,6 +506,9 @@ async function renderizarAhora(contenedor, datosCuenta) {
                 .ahora-tabla td div span:nth-child(2) {
                     font-size: 10px;
                 }
+                .ahora-tabla td div span:nth-child(3) {
+                    font-size: 7px;
+                }
                 .ahora-countdown {
                     font-size: 9px;
                 }
@@ -495,23 +516,34 @@ async function renderizarAhora(contenedor, datosCuenta) {
                     padding: 10px 8px 8px 8px;
                 }
                 .ahora-titulo {
-                    font-size: 14px;
+                    font-size: 16px;
+                }
+                .ahora-subtitulo {
+                    font-size: 11px;
                 }
                 .ahora-badge {
-                    font-size: 9px;
+                    font-size: 8px;
+                }
+                .titulo-finalistas {
+                    font-size: 12px;
+                    padding: 8px 0 4px 0;
+                }
+                .ahora-footer {
+                    font-size: 10px;
+                    padding: 8px;
                 }
             }
         </style>
         
         <div class="ahora-container">
             <div class="ahora-header">
-                <div class="ahora-titulo">🏆 PARTIDOS DE HOY</div>
-                <span class="ahora-badge">🎯 HAZ TUS PRONÓSTICOS</span>
+                <div class="ahora-titulo">🏆 GRACIAS</div>
+                <div class="ahora-subtitulo">Por participar en la Polla Mundialista 2026</div>
+                <div class="ahora-badge">🏁 CIERRE DEL TORNEO</div>
             </div>
             
-            ${infoCardHTML}
-            
             <div class="ahora-tabla-wrapper">
+                <div class="titulo-finalistas"><span>🌟 ESTOS FUERON LOS 4 FINALISTAS</span></div>
                 <table class="ahora-tabla">
                     <thead>
                         <tr>
@@ -526,27 +558,38 @@ async function renderizarAhora(contenedor, datosCuenta) {
                 </table>
             </div>
             
-            <div class="ahora-footer">
-                💡 Haz clic en cualquier fila para pronosticar
+            <div class="ahora-footer" id="ahora-footer-link">
+                💡 Consulta la tabla de posiciones
             </div>
         </div>
     `;
     
-    // ========== EVENTO: CLICK EN FILA → REDIRIGIR A PARTIDOS CON SCROLL ==========
+    // ========== EVENTO: CLICK EN FILA → REDIRIGIR A PARTIDOS ==========
     document.querySelectorAll('.ahora-fila').forEach(fila => {
         fila.addEventListener('click', function() {
             if (globalCambiarVistaCallback) {
                 const partidoId = this.dataset.id;
-                // Pasar ID para scroll automático
                 globalCambiarVistaCallback('partidos', currentJugador, null, 'todos', partidoId);
             }
         });
     });
     
+    // ========== EVENTO: CLICK EN FOOTER → REDIRIGIR A TABLA ==========
+    const footerLink = document.getElementById('ahora-footer-link');
+    if (footerLink) {
+        footerLink.addEventListener('click', function() {
+            if (globalCambiarVistaCallback) {
+                globalCambiarVistaCallback('tabla', currentJugador);
+            }
+        });
+    }
+    
+    // ========== INICIAR COUNTDOWN ==========
     if (document.querySelectorAll('.ahora-countdown').length > 0) {
         iniciarCountdownAhora();
     }
     
+    // ========== VISIBILITY HANDLER ==========
     const visibilityHandler = () => {
         if (document.hidden) {
             detenerCountdownAhora();
@@ -564,5 +607,4 @@ async function renderizarAhora(contenedor, datosCuenta) {
     document.addEventListener('visibilitychange', visibilityHandler);
 }
 
-// ========== EXPORTAR ==========
 export { renderizarAhora };
