@@ -2,7 +2,7 @@
 // Módulo de Tabla de Posiciones - 3 TABLAS:
 // 1. 📊 Grupos: usa campo 'pts_par_grp' (fase de grupos)
 // 2. 🏆 Finales: usa campo 'pts_par_fnl' (fases finales)
-// 3. ⭐ Especiales: usa campo 'pts_fnl_clf' (especiales: 1° y 2° de grupo)
+// 3. ⭐ Especiales: usa campo 'pts_fnl' (especiales: clasificados + finalistas)
 // EXCLUYE usuarios de prueba: 'super', 'mundial'
 // EXCLUYE usuarios con 0 puntos en cada categoría
 // ORGANIZADORES al final del grupo de puntos
@@ -158,31 +158,38 @@ export async function renderizarTabla(contenedor, datosCuenta) {
 
             let jugadoresConPuntos = [];
 
+            // ============================================================
+            // 1. TABLA DE GRUPOS: usa campo 'pts_par_grp'
+            // ============================================================
             if (tipo === 'grupos') {
-                // TABLA DE GRUPOS: usa campo 'pts_par_grp'
                 jugadoresConPuntos = jugadoresActivos
                     .map(j => ({ ...j, puntos: j.pts_par_grp || 0 }))
                     .filter(j => j.puntos > 0);
                     
                 console.log(`[Tabla] Grupos: ${jugadoresConPuntos.length} jugadores con pts_par_grp`);
 
+            // ============================================================
+            // 2. TABLA DE FINALES: usa campo 'pts_par_fnl'
+            // ============================================================
             } else if (tipo === 'finales') {
-                // TABLA DE FINALES: usa campo 'pts_par_fnl'
                 jugadoresConPuntos = jugadoresActivos
                     .map(j => ({ ...j, puntos: j.pts_par_fnl || 0 }))
                     .filter(j => j.puntos > 0);
                     
                 console.log(`[Tabla] Finales: ${jugadoresConPuntos.length} jugadores con pts_par_fnl`);
 
+            // ============================================================
+            // 3. TABLA DE ESPECIALES: usa campo 'pts_fnl'
+            // ============================================================
             } else if (tipo === 'especiales') {
-                // TABLA DE ESPECIALES: usa campo 'pts_fnl_clf'
                 jugadoresConPuntos = jugadoresActivos
-                    .map(j => ({ ...j, puntos: j.pts_fnl_clf || 0 }))
+                    .map(j => ({ ...j, puntos: j.pts_fnl || 0 }))
                     .filter(j => j.puntos > 0);
                     
-                console.log(`[Tabla] Especiales: ${jugadoresConPuntos.length} jugadores con pts_fnl_clf`);
+                console.log(`[Tabla] Especiales: ${jugadoresConPuntos.length} jugadores con pts_fnl`);
             }
 
+            // Ordenar: mayor puntaje primero, organizadores al final
             jugadoresConPuntos.sort((a, b) => {
                 const ptsA = a.puntos || 0;
                 const ptsB = b.puntos || 0;
